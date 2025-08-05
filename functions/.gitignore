@@ -1,0 +1,9 @@
+# Compiled JavaScript files
+lib/
+*.tsbuildinfo
+
+# Node.js dependency directory
+node_modules/
+
+# Env files
+*.local

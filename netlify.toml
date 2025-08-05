@@ -1,0 +1,16 @@
+[build]
+  # The base directory is the root of your monorepo.
+  base = "/"
+  # The publish directory for the final build artifacts.
+  publish = "frontend/dist"
+  # This command ensures the shared types are built before the frontend.
+  command = "npm install && npm run build"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Rewrite rule for the Single-Page Application.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

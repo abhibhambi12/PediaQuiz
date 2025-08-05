@@ -1,0 +1,31 @@
+# Service account keys and environment files
+*.json
+.env
+pediaquizapp-firebase-adminsdk.json
+
+# Specific exceptions for files that SHOULD be committed
+!firebase.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!tsconfig.base.json
+!cors.json
+!apphosting.emulator.yaml
+!frontend/package.json
+!functions/package.json
+!packages/types/package.json
+!frontend/tsconfig.json
+!frontend/tsconfig.node.json
+!functions/tsconfig.json
+!packages/types/tsconfig.json
+
+# Node dependencies
+node_modules/
+**/node_modules/
+
+# Build outputs & logs
+dist/
+lib/
+/functions/lib/
+*.log
+.DS_Store
