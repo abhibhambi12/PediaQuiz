@@ -1,13 +1,14 @@
 // setAdmin.js
 const admin = require('firebase-admin');
-const serviceAccount = require('./pediaquizapp-firebase-adminsdk.json'); // Adjust path if needed
 
-// Initialize Firebase Admin SDK
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount)
-});
+// --- FIX: SECURE INITIALIZATION ---
+// The SDK will now automatically find the credentials from the
+// GOOGLE_APPLICATION_CREDENTIALS environment variable.
+// No require() statement or hardcoded file path is needed.
+admin.initializeApp();
 
-const targetEmail = 'abhibhambi01@gmail.com'; // <--- !!! REPLACE THIS WITH YOUR EMAIL !!!
+// Ensure this is the correct email you want to make an admin
+const targetEmail = 'abhibhambi01@gmail.com'; 
 
 async function setAdminClaim() {
   try {
@@ -17,14 +18,13 @@ async function setAdminClaim() {
     await admin.auth().setCustomUserClaims(user.uid, { isAdmin: true });
     console.log(`Successfully set custom claim 'isAdmin: true' for user: ${targetEmail} (UID: ${user.uid})`);
 
-    // Also update the Firestore user document for consistency with frontend
+    // Also update the Firestore user document for consistency
     await admin.firestore().collection('users').doc(user.uid).update({ isAdmin: true });
     console.log(`Successfully updated Firestore document 'isAdmin: true' for user: ${targetEmail}`);
 
   } catch (error) {
     console.error('Error setting admin claim:', error);
-  } finally {
-    process.exit(); // Exit the script
+    process.exit(1); // Exit with an error code for scripting
   }
 }
 

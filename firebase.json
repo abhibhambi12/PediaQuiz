@@ -7,11 +7,10 @@
         "node_modules",
         ".git",
         "firebase-debug.log",
-        "firebase-debug.*.log"
-      ],
-      "predeploy": [
-        "npm install --prefix \"$RESOURCE_DIR/../\" && npm run build --workspace=@pediaquiz/types --prefix \"$RESOURCE_DIR/../\"",
-        "npm --prefix \"$RESOURCE_DIR\" install"
+        "firebase-debug.*.log",
+        "src",
+        "tsconfig.json",
+        ".eslintrc.js"
       ],
       "runtime": "nodejs20"
     }

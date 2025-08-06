@@ -14,11 +14,12 @@
   "dependencies": {
     "@google-cloud/vertexai": "^1.1.0",
     "@google-cloud/vision": "^4.3.0",
-    "@pediaquiz/types": "1.0.0",
+    "@pediaquiz/types": "file:../packages/types",
     "firebase-admin": "^12.2.0",
     "firebase-functions": "^5.0.1"
   },
   "devDependencies": {
+    "@types/node": "^20.11.25",
     "typescript": "^5.4.5"
   },
   "private": true

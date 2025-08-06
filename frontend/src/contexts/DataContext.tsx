@@ -1,21 +1,28 @@
-import { createContext, useContext, ReactNode } from 'react'; // Removed React import as it's not directly used
+import { createContext, useContext, ReactNode } from 'react';
 import { useQuery, UseQueryResult } from '@tanstack/react-query';
 import { getAppData } from '@/services/firestoreService';
 import type { AppData } from '@pediaquiz/types';
+import { useAuth } from './AuthContext'; // <--- Import useAuth
 
-// The context will provide the result of the TanStack Query
-type DataContextType = UseQueryResult<AppData, Error>;
+// Using the lightweight AppData type from our performance refactor
+type LightweightAppData = Omit<AppData, 'mcqs' | 'flashcards'>;
+type DataContextType = UseQueryResult<LightweightAppData, Error>;
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider = ({ children }: { children: ReactNode }) => {
-    // Use TanStack Query to fetch, cache, and manage the app data.
-    const appDataQuery = useQuery<AppData, Error>({
+    const { user } = useAuth(); // <--- Get the current user from the AuthContext
+
+    const appDataQuery = useQuery<LightweightAppData, Error>({
         queryKey: ['appData'],
         queryFn: getAppData,
         staleTime: 1000 * 60 * 60, // 1 hour
-        gcTime: 1000 * 60 * 60 * 24, // Corrected from cacheTime to gcTime for v5
-        refetchOnWindowFocus: true, 
+        gcTime: 1000 * 60 * 60 * 24,
+        
+        // --- FIX: This is the crucial change ---
+        // The 'enabled' option tells TanStack Query to ONLY run this query
+        // when the condition is true. In this case, only run when 'user' is not null.
+        enabled: !!user, 
     });
 
     return (
@@ -25,7 +32,7 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     );
 };
 
-export const useData = (): DataContextType => { // Return the specific type
+export const useData = (): DataContextType => {
     const context = useContext(DataContext);
     if (context === undefined) {
         throw new Error('useData must be used within a DataProvider');

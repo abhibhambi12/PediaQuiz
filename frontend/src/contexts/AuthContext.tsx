@@ -20,6 +20,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
             if (firebaseUser) {
                 try {
+                    // --- FIX: Force a refresh of the ID token ---
+                    // This is CRITICAL after custom claims have been changed on the backend.
+                    // It ensures the frontend gets the latest claims (like isAdmin).
+                    const idTokenResult = await firebaseUser.getIdTokenResult(true); // true forces a refresh
+
                     const userDocRef = doc(db, 'users', firebaseUser.uid);
                     const userDocSnap = await getDoc(userDocRef);
 
@@ -29,7 +34,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                             uid: firebaseUser.uid,
                             email: firebaseUser.email,
                             displayName: firebaseUser.displayName,
-                            isAdmin: userData.isAdmin || false,
+                            // Use the refreshed token's claims as the source of truth for isAdmin
+                            isAdmin: idTokenResult.claims.isAdmin === true,
                             createdAt: userData.createdAt?.toDate() || new Date(),
                             lastLogin: new Date(), // Set to now
                         });
@@ -41,7 +47,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                             uid: firebaseUser.uid,
                             email: firebaseUser.email,
                             displayName: firebaseUser.displayName,
-                            isAdmin: false, // Default to non-admin
+                            // Use the refreshed token's claims here too
+                            isAdmin: idTokenResult.claims.isAdmin === true,
                             createdAt: new Date(),
                             lastLogin: new Date(),
                         };

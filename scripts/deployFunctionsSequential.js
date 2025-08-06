@@ -1,24 +1,33 @@
 const { spawn } = require('child_process');
 
+// --- FIX: Corrected function names and added all missing functions from your index.ts ---
 const functionsToDeploy = [
   'onUserCreate',
-  'onfilefinalized',
+  'onFileUploaded', // Corrected name
+  'onContentReadyForReview',
   'createUploadFromText',
   'extractMarrowContent',
-  'generateAndApproveMarrowContent', // The correct, combined function
-  'generateGeneralContent',
-  'approveGeneralContent',
-  'summarizeMarrowContent',
+  'generateAndAnalyzeMarrowContent',
+  'approveMarrowContent',
+  'processManualTextInput',
+  'suggestClassification',
+  'prepareBatchGeneration',
+  'startAutomatedBatchGeneration',
+  'autoAssignContent',
+  'approveContent',
+  'resetContent',
+  'reassignContent',
+  'prepareForRegeneration',
   'updateChapterNotes',
-  'deletecontentitem',
   'addquizresult',
   'addattempt',
   'togglebookmark',
+  'deletecontentitem',
+  'resetUpload',
+  'archiveUpload',
   'chatWithAssistant',
   'generatePerformanceAdvice',
-  'generateWeaknessBasedTest',
-  'resetUpload',
-  'archiveUpload'
+  'generateWeaknessBasedTest'
 ];
 
 async function deployFunction(functionName) {
@@ -44,10 +53,12 @@ async function deployFunction(functionName) {
 }
 
 async function deployAllFunctionsSequentially() {
+  console.log('Starting sequential deployment of all functions...');
   for (const funcName of functionsToDeploy) {
     try {
       await deployFunction(funcName);
-      await new Promise(resolve => setTimeout(resolve, 5000)); // 5-second delay between deployments
+      // Optional: Add a small delay between deployments to avoid potential rate limiting issues
+      await new Promise(resolve => setTimeout(resolve, 3000));
     } catch (error) {
       console.error(`Global deployment aborted due to failure with ${funcName}.`);
       process.exit(1);

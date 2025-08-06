@@ -1,13 +1,14 @@
 {
   "compilerOptions": {
-    "target": "ES2022",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "target": "ES2021",
+    "lib": ["ES2021", "DOM", "DOM.Iterable"],
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "isolatedModules": true,
-    "moduleResolution": "node" // Use node for base config
+    "isolatedModules": false, // False for root, true for some specific nested modules (Vite, etc.)
+    "moduleResolution": "node",
+    "baseUrl": "." // Important for path mapping
   }
 }
