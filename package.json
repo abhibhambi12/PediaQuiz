@@ -3,16 +3,17 @@
   "private": true,
   "workspaces": [
     "frontend",
+    "functions",
     "packages/types"
   ],
   "scripts": {
-    "build": "npm run build --workspace=@pediaquiz/types && npm run build --workspace=functions",
+    "build": "npm run build --workspaces --if-present",
+    "build:functions": "npm run build --workspace=functions",
     "dev": "npm run dev --workspace=frontend",
     "clean": "rm -rf node_modules && find . -name 'node_modules' -type d -prune -exec rm -rf '{}' + && find . -name 'package-lock.json' -type f -delete && npm cache clean --force",
     "firebase": "firebase",
     "deploy": "firebase deploy",
-    "deploy:functions": "firebase deploy --only functions",
-    "deploy:functions-fixed": "bash ./deploy-functions.sh"
+    "deploy:functions": "bash ./deploy-functions.sh"
   },
   "devDependencies": {
     "firebase-tools": "^13.13.2",

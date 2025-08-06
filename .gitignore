@@ -29,3 +29,5 @@ lib/
 /functions/lib/
 *.log
 .DS_Store
+# In your root .gitignore file, add this line at the end:
+functions/dist

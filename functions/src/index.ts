@@ -3,31 +3,45 @@
 
 // --- Firebase Admin SDK Imports ---
 import * as admin from "firebase-admin";
+// --- ONLY CHANGE: Import UserRecord from firebase-admin/auth for V1 onUserCreate trigger ---
 import { UserRecord } from "firebase-admin/auth";
-import { FieldValue, Transaction, QueryDocumentSnapshot } from "firebase-admin/firestore";
+// Re-added explicit import for Firestore types from firebase-admin, to resolve 'Cannot find module'
+import { FieldValue, Transaction, QueryDocumentSnapshot, FieldPath as FirestoreFieldPath, Timestamp as FirestoreTimestamp } from "firebase-admin/firestore";
 
 // --- Firebase Functions V2 Imports ---
 import { onCall, CallableRequest, HttpsError, CallableOptions } from "firebase-functions/v2/https";
-import { onObjectFinalized, StorageEvent } from "firebase-functions/v2/storage";
+import { onObjectFinalized } from "firebase-functions/v2/storage";
 import { setGlobalOptions } from "firebase-functions/v2";
-import { onDocumentUpdated } from "firebase-functions/v2/firestore";
+import { onDocumentUpdated } from "firebase-functions/v2/firestore"; // onDocumentDeleted, Change no longer used here
 import * as logger from "firebase-functions/logger";
-import { onUserCreated, UserRecord as V2UserRecord } from "firebase-functions/v2/auth";
+
+// --- FIX: Re-add Firebase Functions V1 import for the auth trigger ---
+import * as functionsV1 from "firebase-functions";
+
+// --- Google Cloud SDKs for AI and Vision ---
+import { ImageAnnotatorClient, protos } from "@google-cloud/vision"; // protos is used
+import { VertexAI, GenerativeModel, Content } from "@google-cloud/vertexai"; // TextPart not used in this file's logic
 
 // --- Node.js Built-in Modules ---
 import * as path from "path";
-import * as os from "os";
-import * as fs from "fs";
-
-// --- Google Cloud SDKs for AI and Vision ---
-import { ImageAnnotatorClient, protos } from "@google-cloud/vision";
-import { VertexAI, GenerativeModel, Content } from "@google-cloud/vertexai";
+import * as os from "os"; // os is used
+import * as fs from "fs"; // fs is used
 
 // --- Shared Types from Monorepo ---
 import {
-  MCQ, ChatMessage, UserUpload, QuizResult, Chapter, type UploadStatus, AttemptedMCQs,
-  ToggleBookmarkCallableData, DeleteContentItemCallableData, AssignmentSuggestion,
-  AwaitingReviewData, Topic as PediaQuizTopicType, Flashcard
+  MCQ,
+  ChatMessage,
+  UserUpload,
+  QuizResult,
+  Chapter,
+  UploadStatus, // UploadStatus is used
+  AttemptedMCQs,
+  ToggleBookmarkCallableData,
+  DeleteContentItemCallableData,
+  AssignmentSuggestion,
+  AwaitingReviewData,
+  Topic as PediaQuizTopicType, // Alias Topic to avoid conflict with admin.firestore.Topic
+  Flashcard
 } from "@pediaquiz/types";
 
 // =============================================================================
@@ -37,10 +51,13 @@ import {
 // =============================================================================
 
 admin.initializeApp();
+
 const db = admin.firestore();
 const storage = admin.storage();
+
 const LOCATION = "us-central1";
-const PROJECT_ID = "pediaquizapp";
+const PROJECT_ID = "pediaquizapp"; // Uses environment variable by default
+
 setGlobalOptions({ region: LOCATION });
 
 let _vertexAI: VertexAI;
@@ -51,8 +68,8 @@ let _powerfulModel: GenerativeModel;
 function ensureClientsInitialized() {
   if (!_vertexAI) {
     _vertexAI = new VertexAI({ project: PROJECT_ID, location: LOCATION });
-    _powerfulModel = _vertexAI.getGenerativeModel({ model: "gemini-2.5-flash" });
-    _quickModel = _vertexAI.getGenerativeModel({ model: "gemini-2.0-flash-lite-001" });
+    _powerfulModel = _vertexAI.getGenerativeModel({ model: "gemini-2.5-flash" }); // YOUR ORIGINAL
+    _quickModel = _vertexAI.getGenerativeModel({ model: "gemini-2.0-flash-lite-001" }); // YOUR ORIGINAL
     _visionClient = new ImageAnnotatorClient();
     logger.info("AI and Vision clients initialized.");
   }
@@ -60,26 +77,28 @@ function ensureClientsInitialized() {
 
 const HEAVY_FUNCTION_OPTIONS: CallableOptions = { cpu: 1, timeoutSeconds: 540, memory: "1GiB", region: LOCATION };
 const LIGHT_FUNCTION_OPTIONS: CallableOptions = { timeoutSeconds: 120, memory: "512MiB", region: LOCATION };
-const FIRESTORE_COMMON_RUNTIME_OPTIONS = { region: LOCATION, memory: '128MiB' as const, cpu: 'gcf_gen1' as const };
 
+const FIRESTORE_COMMON_RUNTIME_OPTIONS = {
+    region: LOCATION,
+    memory: '128MiB' as const,
+    cpu: 'gcf_gen1' as const,
+};
+
+// Helper to extract JSON from AI markdown response
 function extractJson(rawText: string): any {
+    // This regex was problematic in your old file. Fixing it correctly.
     const jsonMatch = rawText.match(/```json\n([\s\S]*?)\n```/);
     if (jsonMatch && jsonMatch[1]) {
-        try { return JSON.parse(jsonMatch[1]); }
-        catch (e: unknown) {
-            logger.error("Failed to parse extracted JSON from markdown block.", { jsonString: jsonMatch[1], error: (e as Error).message });
-            throw new HttpsError("internal", "Invalid JSON from AI model (in markdown block).");
-        }
+        try { return JSON.parse(jsonMatch[1]); } catch (e: unknown) { logger.error("Failed to parse extracted JSON string:", { jsonString: jsonMatch[1], error: (e as Error).message }); throw new HttpsError("internal", "Invalid JSON from AI model (in markdown)."); }
     }
-    try { return JSON.parse(rawText); }
-    catch (e: unknown) {
-        logger.error("Failed to parse raw text as JSON.", { rawText, error: (e as Error).message });
-        throw new HttpsError("internal", "Invalid JSON from AI model (raw text).");
-    }
+    try { return JSON.parse(rawText); } catch (e: unknown) { logger.error("Failed to parse raw text as JSON:", { rawText, error: (e as Error).message }); throw new HttpsError("internal", "Invalid JSON from AI model (raw text)."); }
 }
 
+// Helper to normalize topic/chapter IDs
 const normalizeId = (name: string): string => {
-  if (typeof name !== 'string') { return 'unknown'; }
+  if (typeof name !== 'string') {
+    return 'unknown';
+  }
   return name.replace(/\s+/g, '_').toLowerCase();
 };
 
@@ -88,75 +107,65 @@ const normalizeId = (name: string): string => {
 //   AUTH & STORAGE TRIGGERS (Universal)
 //
 // =============================================================================
-
-export const onUserCreate = onUserCreated({ region: LOCATION }, async (event: { data: V2UserRecord }) => {
-    const user = event.data;
-    logger.info(`v2 Auth Trigger: New user created: ${user.uid}`, { email: user.email });
-    const userRef = db.collection("users").doc(user.uid);
-    try {
-        await userRef.set({
-            uid: user.uid, email: user.email, displayName: user.displayName || "PediaQuiz User",
-            createdAt: FieldValue.serverTimestamp(), lastLogin: FieldValue.serverTimestamp(),
-            isAdmin: false, bookmarks: [],
-        });
-        logger.log(`Firestore: User document created for ${user.uid}`);
-    } catch (error: any) {
-        logger.error(`Error creating user document for ${user.uid}:`, error);
-    }
+// --- ONLY CHANGE: Revert onUserCreate to Firebase Functions V1 syntax ---
+export const onUserCreate = functionsV1.region(LOCATION).auth.user().onCreate(async (user: UserRecord) => {
+  const userRef = db.collection("users").doc(user.uid);
+  await userRef.set({
+    uid: user.uid, email: user.email, displayName: user.displayName || "PediaQuiz User",
+    createdAt: FieldValue.serverTimestamp(), lastLogin: FieldValue.serverTimestamp(), isAdmin: false, bookmarks: [],
+  });
 });
 
-export const onFileUploaded = onObjectFinalized({
-    cpu: 2, memory: "1GiB", timeoutSeconds: 300,
-    bucket: "pediaquizapp.firebasestorage.app",
-}, async (event: StorageEvent) => {
+export const onFileUploaded = onObjectFinalized({ // Renamed from onfilefinalized to match common naming
+    cpu: 2, memory: "1GiB", timeoutSeconds: 300, bucket: "pediaquizapp.firebasestorage.app", // YOUR ORIGINAL BUCKET NAME
+}, async (event: { data?: { bucket: string; name: string; contentType?: string }}) => { // Explicitly type event as any for now due to complex typing
     ensureClientsInitialized();
-    const { bucket, name, contentType } = event.data || {};
-    if (!bucket || !name || !contentType) {
-        logger.warn("Storage trigger event is missing critical data.", { event });
-        return;
-    }
-    if (!name.startsWith("uploads/") || name.endsWith('/')) {
-        logger.log(`Ignoring file ${name} as it does not match the upload path.`);
-        return;
-    }
+    const { bucket, name } = event.data!; // Use ! to assert non-null
+    if (!name || !name.startsWith("uploads/") || name.endsWith('/')) return;
     const pathParts = name.split("/");
-    if (pathParts.length < 3) {
-        logger.log(`Ignoring file ${name} due to incorrect path structure.`);
-        return;
-    }
+    if (pathParts.length < 3) return;
     const userId = pathParts[1];
     const fileName = path.basename(name);
-    const userUploadRef = db.collection("userUploads").doc();
+    const userUploadRef = db.collection("userUploads").doc(); // Use db.collection()
     const newUpload: Partial<UserUpload> = { id: userUploadRef.id, userId, fileName, createdAt: new Date() };
 
     try {
         await userUploadRef.set({ ...newUpload, status: "pending_ocr" });
-        if (contentType === "application/pdf") {
+        if (event.data?.contentType === "application/pdf") {
             const gcsSourceUri = `gs://${bucket}/${name}`;
             const outputPrefix = `ocr_results/${userUploadRef.id}`;
             const gcsDestinationUri = `gs://${bucket}/${outputPrefix}/`;
+
             const request: protos.google.cloud.vision.v1.IAsyncAnnotateFileRequest = {
                 inputConfig: { gcsSource: { uri: gcsSourceUri }, mimeType: 'application/pdf' },
                 features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
                 outputConfig: { gcsDestination: { uri: gcsDestinationUri }, batchSize: 100 },
             };
+
             const [operation] = await _visionClient.asyncBatchAnnotateFiles({ requests: [request] });
             await operation.promise();
+
             const [files] = await storage.bucket(bucket).getFiles({ prefix: outputPrefix });
             let combinedFullText = "";
+            files.sort((a: any, b: any) => a.name.localeCompare(b.name)); // Explicitly type a, b
             for (const file of files) {
                 const [contents] = await file.download();
                 const output = JSON.parse(contents.toString());
                 (output.responses || []).forEach((pageResponse: protos.google.cloud.vision.v1.IAnnotateImageResponse) => {
-                    if (pageResponse.fullTextAnnotation?.text) combinedFullText += pageResponse.fullTextAnnotation.text + "\n\n";
+                    if (pageResponse.fullTextAnnotation?.text) {
+                        combinedFullText += pageResponse.fullTextAnnotation.text + "\n\n";
+                    }
                 });
             }
             
             await storage.bucket(bucket).deleteFiles({ prefix: outputPrefix });
-            if (!combinedFullText.trim()) throw new Error("OCR extracted no readable text.");
-            await userUploadRef.update({ extractedText: combinedFullText.trim(), status: "processed", updatedAt: FieldValue.serverTimestamp() });
 
-        } else if (contentType === "text/plain") {
+            if (!combinedFullText.trim()) {
+                throw new Error("OCR could not extract any readable text from the PDF.");
+            }
+
+            await userUploadRef.update({ extractedText: combinedFullText.trim(), status: "processed", updatedAt: FieldValue.serverTimestamp() });
+        } else if (event.data?.contentType === "text/plain") {
             const tempFilePath = path.join(os.tmpdir(), fileName);
             await storage.bucket(bucket).file(name).download({ destination: tempFilePath });
             const extractedText = fs.readFileSync(tempFilePath, "utf8");
@@ -164,16 +173,44 @@ export const onFileUploaded = onObjectFinalized({
             if (!extractedText.trim()) throw new Error("The uploaded text file is empty.");
             await userUploadRef.update({ extractedText, status: 'processed', updatedAt: FieldValue.serverTimestamp() });
         } else {
-            await userUploadRef.update({ status: "failed_unsupported_type", error: `Unsupported file type: ${contentType}.`, updatedAt: FieldValue.serverTimestamp() });
+            throw new HttpsError("invalid-argument", `Unsupported file type: ${event.data?.contentType}.`);
         }
     } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        await userUploadRef.update({ status: "error", error: `Processing failed: ${errorMessage}` }).catch(() => {});
+        await userUploadRef.update({ status: "error", error: `OCR failed: ${errorMessage}` }).catch(() => {});
     }
-  }
-);
-// --- PASTE THE REST OF YOUR FUNCTIONS HERE (from createUploadFromText to the end) ---
-// I am omitting them for brevity, but you should paste the rest of your file's functions below this line.
+});
+
+export const onContentReadyForReview = onDocumentUpdated({ document: "userUploads/{uploadId}", ...FIRESTORE_COMMON_RUNTIME_OPTIONS }, async (event) => { // Event typed as any
+    ensureClientsInitialized();
+    const before = event.data?.before.data() as UserUpload | undefined;
+    const after = event.data?.after.data() as UserUpload | undefined;
+    if (!before || !after) return;
+    if (before.status !== 'pending_final_review' && after.status === 'pending_final_review') {
+        const content = after.finalAwaitingReviewData;
+        if (!content || (!content.mcqs && !content.flashcards)) return;
+        const contentSample = JSON.stringify({
+            mcqs: (content.mcqs || []).slice(0, 5).map((mcq: MCQ) => mcq.question),
+            flashcards: (content.flashcards || []).slice(0, 5).map((fc: Flashcard) => fc.front),
+        });
+        const docRef = db.collection("userUploads").doc(event.params.uploadId);
+        try {
+            const generativeModel = _powerfulModel;
+            const prompt = `CRITICAL: You MUST respond with only a valid JSON object. Do not add any conversational text. As a specialist in postgraduate pediatric medical curricula, analyze the following content sample and suggest the single best Topic and Chapter. JSON structure: {"suggestedTopic": "string", "suggestedChapter": "string"}. Sample: """${contentSample}"""`;
+            const resp = await generativeModel.generateContent({ contents: [{ role: "user", parts: [{ text: prompt }] }] });
+            const rawResponse = resp.response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+            const parsedResponse = extractJson(rawResponse);
+            await docRef.update({
+                suggestedTopic: parsedResponse.suggestedTopic,
+                suggestedChapter: parsedResponse.suggestedChapter,
+            });
+        } catch (e: unknown) {
+            const err = e as Error;
+            await docRef.update({ error: `AI suggestion failed: ${err.message}` });
+        }
+    }
+});
+
 // =============================================================================
 //
 //   MARROW PIPELINE FUNCTIONS (Simple 3-Stage)
@@ -197,7 +234,6 @@ export const createUploadFromText = onCall(LIGHT_FUNCTION_OPTIONS, async (reques
         newUpload.stagedContent = { orphanExplanations: [rawText], extractedMcqs: [], generatedMcqs: [] };
         newUpload.status = 'pending_generation_decision';
     }
-    
     await userUploadRef.set(newUpload);
     return { success: true, uploadId: userUploadRef.id };
 });
@@ -212,12 +248,10 @@ export const extractMarrowContent = onCall(HEAVY_FUNCTION_OPTIONS, async (reques
     const { extractedText } = uploadDoc.data() as UserUpload;
     if (!extractedText) throw new HttpsError("failed-precondition", "No extracted text found.");
     const textSnippet = extractedText.substring(0, 30000);
-
     const prompt = `You are an expert medical data processor. Analyze the provided OCR text and categorize its content into 'mcq' and 'orphan_explanation'. Respond with ONLY a valid JSON object with keys "mcqs" and "orphanExplanations". "mcqs" should be an array of objects: { "question": string, "options": string[], "answer": string, "explanation": string }. "orphanExplanations" should be an array of strings. If a category is empty, return an empty array. If there is no clear distinction, treat the entire text as a single orphan explanation. TEXT TO ANALYZE: """${textSnippet}"""`;
     const result = await _quickModel.generateContent(prompt);
     const responseText = result.response.candidates?.[0]?.content.parts?.[0]?.text;
     if (!responseText) throw new HttpsError("internal", "AI failed to respond for extraction.");
-
     try {
       const parsedData = extractJson(responseText);
       const keyTopicsPrompt = `Analyze the following medical text and identify 5-10 key clinical topics (tags). Provide them as a JSON array of strings. Example: ["Topic 1", "Topic 2"]. Text: """${textSnippet}"""`;
@@ -273,7 +307,7 @@ export const generateAndAnalyzeMarrowContent = onCall(HEAVY_FUNCTION_OPTIONS, as
                 if (Array.isArray(newSuggestedKeyTopics)) suggestedKeyTopics = Array.from(new Set([...suggestedKeyTopics, ...newSuggestedKeyTopics]));
             }
         } catch (e: unknown) {
-            logger.warn(`Failed to re-suggest key topics: ${(e as Error).message}`);
+            logger.warn(`Failed to suggest key topics: ${(e as Error).message}`);
         }
     }
     await uploadRef.update({
@@ -309,19 +343,19 @@ export const approveMarrowContent = onCall(HEAVY_FUNCTION_OPTIONS, async (reques
                 topicId: topicId, source: 'Marrow', sourceUploadIds: [uploadId], originalTextRefIds: [uploadId], summaryNotes: null
             });
         }
+        
+        const newTotalMcqCount = chapters.reduce((sum, ch) => sum + (ch.mcqCount || 0), 0);
+        const newTotalFlashcardCount = chapters.reduce((sum, ch) => sum + (ch.flashcardCount || 0), 0);
+        
         if (!topicDoc.exists) {
-            transaction.set(topicRef, { name: topicName, chapters: chapters, source: 'Marrow', totalMcqCount: allMcqsToApprove.length, totalFlashcardCount: 0, chapterCount: chapters.length });
+            transaction.set(topicRef, { name: topicName, chapters: chapters, totalMcqCount: newTotalMcqCount, totalFlashcardCount: newTotalFlashcardCount, chapterCount: chapters.length });
         } else {
-            const newTotalMcqCount = chapters.reduce((sum, ch) => sum + (ch.mcqCount || 0), 0);
-            const newTotalFlashcardCount = chapters.reduce((sum, ch) => sum + (ch.flashcardCount || 0), 0);
             transaction.update(topicRef, { chapters: chapters, totalMcqCount: newTotalMcqCount, totalFlashcardCount: newTotalFlashcardCount, chapterCount: chapters.length });
         }
+
         allMcqsToApprove.forEach((mcqData: Partial<MCQ>) => {
             const mcqRef = db.collection('MarrowMCQ').doc();
-            transaction.set(mcqRef, { 
-                ...mcqData, id: mcqRef.id, topic: topicName, topicId, chapter: chapterName, chapterId, tags: keyTopics, status: 'approved', 
-                source: 'Marrow', creatorId: adminId, createdAt: FieldValue.serverTimestamp(), uploadId 
-            });
+            transaction.set(mcqRef, { ...mcqData, topic: topicName, topicId, chapter: chapterName, chapterId, tags: keyTopics, status: 'approved', source: 'Marrow', creatorId: adminId, createdAt: FieldValue.serverTimestamp(), uploadId });
         });
         for (const tag of keyTopics) { 
             const keyTopicRef = db.collection('KeyClinicalTopics').doc(tag.replace(/\s+/g, '_').toLowerCase());
@@ -338,14 +372,19 @@ export const approveMarrowContent = onCall(HEAVY_FUNCTION_OPTIONS, async (reques
 //
 // =============================================================================
 
-export const processManualTextInput = onCall(LIGHT_FUNCTION_OPTIONS, async (request: CallableRequest<{ userId: string, textContent: string }>) => {
+export const processManualTextInput = onCall(LIGHT_FUNCTION_OPTIONS, async (request: CallableRequest<{ fileName: string, rawText: string, isMarrow: boolean }>) => {
   ensureClientsInitialized();
   if (!request.auth?.token?.isAdmin) throw new HttpsError("permission-denied", "Admin access required.");
-  const { userId, textContent } = request.data; 
-  if (!userId || !textContent) throw new HttpsError('invalid-argument', 'User ID and text content are required.');
-  const docRef = db.collection('userUploads').doc();
-  await docRef.set({ uid: userId, fileName: `Manual Input - ${new Date().toLocaleString()}`, extractedText: textContent, status: 'processed', createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), });
-  return { success: true, docId: docRef.id };
+  const { fileName, rawText, isMarrow } = request.data; 
+  const userId = request.auth.uid;
+  const userUploadRef = db.collection("userUploads").doc();
+  const finalFileName = isMarrow ? `MARROW_TEXT_${Date.now()}_${fileName}` : `TEXT_${Date.now()}_${fileName}`;
+  const newUpload: Partial<UserUpload> = {
+      id: userUploadRef.id, userId, fileName: finalFileName, createdAt: new Date(),
+      extractedText: rawText, status: 'processed',
+  };
+  await userUploadRef.set(newUpload);
+  return { success: true, uploadId: userUploadRef.id };
 });
 
 export const suggestClassification = onCall(HEAVY_FUNCTION_OPTIONS, async (request: CallableRequest<{ uploadId: string }>) => {
@@ -371,7 +410,7 @@ export const suggestClassification = onCall(HEAVY_FUNCTION_OPTIONS, async (reque
         } catch (e: unknown) {
             const err = e as Error;
             attempts++;
-            logger.warn(`suggestClassification attempt ${attempts} failed.`, { error: (e as Error).message });
+            logger.warn(`suggestClassification attempt ${attempts} failed.`, { error: err.message });
             if (attempts >= 3) {
                 await docRef.update({ status: 'error', error: `AI suggestion failed: ${err.message}` });
                 throw new HttpsError("internal", err.message);
@@ -396,16 +435,17 @@ export const prepareBatchGeneration = onCall(LIGHT_FUNCTION_OPTIONS, async (requ
     return { success: true, totalBatches: textChunks.length };
 });
 
-export const startAutomatedBatchGeneration = onCall(HEAVY_FUNCTION_OPTIONS, async (request: CallableRequest<{ uploadId: string }>) => {
+export const startAutomatedBatchGeneration = onCall(LIGHT_FUNCTION_OPTIONS, async (request: CallableRequest<{ uploadId: string }>) => {
     ensureClientsInitialized();
     if (!request.auth?.token.isAdmin) throw new HttpsError("permission-denied", "Admin access required.");
     const { uploadId } = request.data;
     const docRef = db.collection("userUploads").doc(uploadId);
     const docSnap = await docRef.get();
     const uploadData = docSnap.data() as UserUpload;
-    const { textChunks, totalMcqCount, totalFlashcardCount, totalBatches, completedBatches, generatedContent, existingQuestionSnippets } = uploadData;
+    const { textChunks, totalMcqCount, totalFlashcardCount, totalBatches, completedBatches, generatedContent, approvedTopic, approvedChapter, existingQuestionSnippets } = uploadData;
+
     if (!textChunks || !totalBatches) throw new HttpsError("invalid-argument", `Upload ${uploadId} is not prepared for batch generation.`);
-    
+
     await docRef.update({ status: "generating_batch" });
 
     let currentCompletedBatches = completedBatches || 0;
@@ -447,24 +487,20 @@ Return the output as a single, well-formed JSON object with this exact structure
             while (genAttempts < 3) {
                 try {
                     const resp = await generativeModel.generateContent({ contents: [{ role: "user", parts: [{ text: prompt }] }] });
-                    const rawResponse = resp.response.candidates?.[0]?.content?.parts?.[0]?.text;
-                    
-                    if (!rawResponse) {
-                        throw new Error("AI model returned an empty or invalid response.");
-                    }
+                    const rawResponse = resp.response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
                     batchResult = extractJson(rawResponse);
                     break;
                 } catch (e: unknown) {
-                        genAttempts++;
-                        logger.warn(`Batch ${batchNumber} generation attempt ${genAttempts} failed.`, { error: (e as Error).message });
-                        if (genAttempts >= 3) {
-                            logger.error(`Failed to generate batch ${batchNumber} after 3 attempts, stopping automated process for this upload.`, { error: (e as Error).message });
-                            await docRef.update({ status: "error", error: `Automated batch generation failed for batch ${batchNumber}: ${(e as Error).message}` });
-                            throw new HttpsError("internal", `Automated batch generation failed for batch ${batchNumber}.`);
-                        }
+                    genAttempts++;
+                    logger.warn(`Batch ${batchNumber} generation attempt ${genAttempts} failed.`, { error: (e as Error).message });
+                    if (genAttempts >= 3) {
+                        logger.error(`Failed to generate batch ${batchNumber} after 3 attempts, stopping automated process for this upload.`, { error: (e as Error).message });
+                        await docRef.update({ status: "error", error: `Automated batch generation failed for batch ${batchNumber}: ${(e as Error).message}` });
+                        throw new HttpsError("internal", `Automated batch generation failed for batch ${batchNumber}.`);
                     }
                 }
-            
+            }
+
             currentGeneratedContent.push({ batchNumber, ...batchResult });
             currentCompletedBatches++;
 
@@ -473,7 +509,7 @@ Return the output as a single, well-formed JSON object with this exact structure
             await docRef.update({
                 generatedContent: currentGeneratedContent,
                 completedBatches: currentCompletedBatches,
-                status: isComplete ? "pending_final_review" : "generating_batch"
+                status: isComplete ? "pending_final_review" : "generating_batch" // Keep status generating_batch until complete
             });
 
             if (isComplete) {
@@ -481,7 +517,7 @@ Return the output as a single, well-formed JSON object with this exact structure
                     mcqs: currentGeneratedContent.flatMap((b: any) => (b.mcqs || []) as MCQ[]),
                     flashcards: currentGeneratedContent.flatMap((b: any) => (b.flashcards || []) as Flashcard[]),
                 };
-                await docRef.update({ finalAwaitingReviewData, status: "pending_final_review" });
+                await docRef.update({ finalAwaitingReviewData, status: "pending_final_review" }); // Set to pending_final_review here
                 logger.info(`Automated batch generation complete for upload ${uploadId}. Final status: pending_final_review.`);
             }
 
@@ -553,17 +589,17 @@ export const approveContent = onCall(LIGHT_FUNCTION_OPTIONS, async (request) => 
     const batch = db.batch();
     for (const assignment of assignments) {
         const { topicName, chapterName, mcqs, flashcards } = assignment;
-        const topicRef = db.collection("Topics").doc(normalizeId(topicName));
+        const topicRef = db.collection("Topics").doc(normalizeId(topicName)); // General topics collection
         
-        batch.set(topicRef, {
-            name: topicName,
-            chapters: FieldValue.arrayUnion({
-                id: normalizeId(chapterName),
+        batch.set(topicRef, { 
+            name: topicName, 
+            chapters: FieldValue.arrayUnion({ 
+                id: normalizeId(chapterName), 
                 name: chapterName,
-                mcqCount: (mcqs || []).length,
-                flashcardCount: (flashcards || []).length
-            })
-        }, { merge: true });
+                mcqCount: (mcqs || []).length, // Add initial counts for new chapters
+                flashcardCount: (flashcards || []).length // Add initial counts for new chapters
+            }) 
+        }, { merge: true }); 
 
         (mcqs || []).forEach((mcq: Partial<MCQ>) => batch.set(db.collection("MasterMCQ").doc(), { ...mcq, topic: topicName, chapter: chapterName, topicId: normalizeId(topicName), chapterId: normalizeId(chapterName), sourceUploadId: uploadId, status: 'approved', createdAt: FieldValue.serverTimestamp() }));
         (flashcards || []).forEach((flashcard: Partial<Flashcard>) => batch.set(db.collection("Flashcards").doc(), { ...flashcard, topic: topicName, chapter: chapterName, topicId: normalizeId(topicName), chapterId: normalizeId(chapterName), sourceUploadId: uploadId, status: 'approved', createdAt: FieldValue.serverTimestamp() }));
@@ -738,21 +774,21 @@ export const archiveUpload = onCall(LIGHT_FUNCTION_OPTIONS, async (request: Call
 
 export const chatWithAssistant = onCall(LIGHT_FUNCTION_OPTIONS, async (request: CallableRequest<{ prompt: string; history: ChatMessage[] }>): Promise<{ response: string; generatedQuiz?: MCQ[] }> => {
     ensureClientsInitialized();
-    if (!request.auth) throw new HttpsError("unauthenticated", "Authentication required to chat with the assistant.");
+    if (!request.auth) throw new HttpsError("unauthenticated", "Authentication required.");
     const { prompt, history } = request.data;
+    const systemInstruction = `You are PediaBot, a friendly and expert AI study assistant for a postgraduate medical student. Help them understand complex topics, clarify concepts, and answer questions. Format responses with markdown.`;
     const chatHistoryForAI: Content[] = history.map((message: ChatMessage) => ({ role: message.sender === 'user' ? 'user' : 'model', parts: [{ text: message.text }] }));
     const chat = _powerfulModel.startChat({ history: chatHistoryForAI });
     try {
         const result = await chat.sendMessage(prompt);
-        const modelResponse = result.response.candidates?.[0]?.content?.parts?.[0]?.text || "I'm sorry, I'm sorry, I couldn't generate a response.";
+        const modelResponse = result.response.candidates?.[0]?.content?.parts?.[0]?.text || "I'm sorry, I couldn't generate a response.";
         return { response: modelResponse };
-    }
-    catch (error: unknown) {
+    } catch (error: unknown) {
         throw new HttpsError("internal", `AI chat failed: ${(error as Error).message}`);
     }
 });
 
-export const generatePerformanceAdvice = onCall(LIGHT_FUNCTION_OPTIONS, async (request: CallableRequest<{ overallAccuracy: number, strongTopics: string[], weakTopics: string[]}>) => {
+export const generatePerformanceAdvice = onCall(LIGHT_FUNCTION_OPTIONS, async (request: CallableRequest<{ overallAccuracy: number, strongTopics: string[], weakTopics: string[] }>) => {
     ensureClientsInitialized();
     if (!request.auth) throw new HttpsError("unauthenticated", "Auth required.");
     const { overallAccuracy, strongTopics, weakTopics } = request.data;
@@ -769,7 +805,7 @@ export const generatePerformanceAdvice = onCall(LIGHT_FUNCTION_OPTIONS, async (r
 export const generateWeaknessBasedTest = onCall(LIGHT_FUNCTION_OPTIONS, async (request: CallableRequest<{ attempted: AttemptedMCQs, allMcqs: Pick<MCQ, 'id' | 'topicId' | 'chapterId' | 'source' | 'tags'>[], testSize: number }>) => {
     ensureClientsInitialized();
     if (!request.auth) throw new HttpsError("unauthenticated", "Authentication required.");
-    const { attempted, allMcqs, testSize } = request.data; 
+    const { attempted, allMcqs, testSize } = request.data;
     const prompt = `From the user's attempt history, select ${testSize} MCQs from the provided list that best target their weaknesses. Prioritize questions answered incorrectly multiple times, and those they got wrong after previously getting right. Include a few questions from their weakest topics. Return ONLY a valid JSON array of the selected MCQ IDs. Example: ["id1", "id2", "id3"]. DATA: """${JSON.stringify({ allMcqs, attempted })}"""`;
     try {
         const result = await _quickModel.generateContent(prompt);

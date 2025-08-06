@@ -7,3 +7,5 @@ node_modules/
 
 # Env files
 *.local
+# In your root .gitignore file, add this line at the end:
+functions/dist

@@ -4,7 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { collection, query, where, getDocs, orderBy, QueryDocumentSnapshot } from 'firebase/firestore';
 import { db, functions } from '@/firebase';
-import { httpsCallable, HttpsCallableResult } from 'firebase/functions';
+import { httpsCallable } from 'firebase/functions';
 import type { UserUpload, UploadStatus, Topic, Chapter, AssignmentSuggestion } from '@pediaquiz/types';
 import Loader from '@/components/Loader';
 import { useToast } from '@/components/Toast';
@@ -25,7 +25,8 @@ const approveMarrowContentFn = httpsCallable<{ uploadId: string, topicId: string
 const suggestClassificationFn = httpsCallable< { uploadId: string }, { success: boolean, suggestedTopic?: string, suggestedChapter?: string } >(functions, 'suggestClassification');
 const prepareBatchGenerationFn = httpsCallable< { uploadId: string, totalMcqCount: number, totalFlashcardCount: number, batchSize: number, approvedTopic: string, approvedChapter: string }, { success: boolean, totalBatches: number } >(functions, 'prepareBatchGeneration');
 const startAutomatedBatchGenerationFn = httpsCallable<{ uploadId: string }, { success: boolean }>(functions, 'startAutomatedBatchGeneration');
-const approveContentFn = httpsCallable<{ uploadId: string, assignments: AssignmentSuggestion[] }, { success: boolean }>(functions, 'approveContent');
+// --- FIX: Correct the return type of approveContentFn to include the 'message' property ---
+const approveContentFn = httpsCallable<{ uploadId: string, assignments: AssignmentSuggestion[] }, { success: boolean, message?: string }>(functions, 'approveContent');
 const autoAssignContentFn = httpsCallable<{ uploadId: string, existingTopics: Topic[], scopeToTopicName?: string }, { success: boolean, suggestions: AssignmentSuggestion[] }>(functions, 'autoAssignContent');
 
 
@@ -222,11 +223,12 @@ const UploadCard: React.FC<{ upload: UserUpload, allTopics: Topic[] }> = ({ uplo
                                 <>
                                     <label className="block text-sm font-medium mb-1">New MCQs from explanations:</label>
                                     <input type="number" value={marrowNumToGenerate} onChange={e => setMarrowNumToGenerate(parseInt(e.target.value, 10))} placeholder="Number of MCQs to generate" min="0" className="input-field w-full" />
-                                    <button onClick={() => generateMarrowMutation.mutate({ uploadId: upload.id, count: marrowNumToGenerate })} disabled={generateMarrowMutation.isPending || marrowNumToGenerate < 0} className="btn-primary w-full">Generate & Analyze Topics</button>
+                                    {/* --- FIX: Corrected mutation variable name from generateMarrowMutation to generateAndAnalyzeMarrowMutation --- */}
+                                    <button onClick={() => generateAndAnalyzeMarrowMutation.mutate({ uploadId: upload.id, count: marrowNumToGenerate })} disabled={generateAndAnalyzeMarrowMutation.isPending || marrowNumToGenerate < 0} className="btn-primary w-full">Generate & Analyze Topics</button>
                                 </>
                             )}
                             {(orphanMarrowExplanationsCount === 0 || marrowNumToGenerate === 0) && (extractedMarrowMcqsCount > 0) && (
-                                <button onClick={() => generateMarrowMutation.mutate({ uploadId: upload.id, count: 0 })} disabled={generateMarrowMutation.isPending} className="btn-primary w-full">Skip Generation & Assign</button>
+                                <button onClick={() => generateAndAnalyzeMarrowMutation.mutate({ uploadId: upload.id, count: 0 })} disabled={generateAndAnalyzeMarrowMutation.isPending} className="btn-primary w-full">Skip Generation & Assign</button>
                             )}
                             {extractedMarrowMcqsCount === 0 && orphanMarrowExplanationsCount === 0 && (
                                 <p className="text-sm text-slate-500">No content found after extraction. Check original document or reset.</p>

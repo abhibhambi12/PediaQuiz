@@ -1,17 +1,9 @@
 {
   "functions": [
     {
-      "source": "functions",
+      "source": "functions/dist",
       "codebase": "default",
-      "ignore": [
-        "node_modules",
-        ".git",
-        "firebase-debug.log",
-        "firebase-debug.*.log",
-        "src",
-        "tsconfig.json",
-        ".eslintrc.js"
-      ],
+      "ignore": [],
       "runtime": "nodejs20"
     }
   ],

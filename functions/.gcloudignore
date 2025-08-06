@@ -1,0 +1,15 @@
+# Default ignores for a clean deployment package
+node_modules
+.git
+.gcloudignore
+firebase-debug.log
+firebase-debug.*.log
+# We don't need to deploy the source TS files, only the compiled JS in lib/
+src/
+tsconfig.json
+.eslintrc.js
+
+# --- THE DEFINITIVE FIX ---
+# Un-ignore (force include) our specific local workspace dependency.
+# This ensures it gets bundled and uploaded to Cloud Build.
+!node_modules/@pediaquiz/types

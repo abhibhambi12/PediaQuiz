@@ -5,8 +5,7 @@
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "scripts": {
-    "build": "tsc",
-    "prepack": "npm run build"
+    "build": "tsc --build"
   },
   "keywords": [],
   "author": "",
