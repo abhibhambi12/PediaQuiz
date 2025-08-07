@@ -84,8 +84,14 @@ const MCQSessionPage: React.FC = () => {
     const [mcqs, setMcqs] = useState<MCQ[]>([]);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [answers, setAnswers] = useState<Record<number, string | null>>({});
-    const [markedForReview, setMarkedForReview] = useState<Set<number>>(new Set());
-    const [sessionStreak, setSessionStreak] = useState(0);
+    const [markedForReview, setMarkedForReview] = useState<Set<number>>(() => {
+        try {
+            const saved = sessionStorage.getItem(`pediaquiz_marked_questions_${id}_${mode}`);
+            return saved ? new Set(JSON.parse(saved)) : new Set();
+        } catch {
+            return new Set();
+        }
+    });
     const [isFinished, setIsFinished] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     
@@ -132,31 +138,44 @@ const MCQSessionPage: React.FC = () => {
         onError: (error) => addToast(`Error deleting MCQ: ${error.message}`, "error"),
     });
 
-    const { generatedMcqIds, incorrectMcqIds } = (location.state || {}) as { generatedMcqIds?: string[], incorrectMcqIds?: string[] };
+    const locationState = location.state as { generatedMcqIds?: string[], incorrectMcqIds?: string[], selectedChapterIds?: string[], questionCount?: number } || {};
 
     useEffect(() => {
         if (!appData?.mcqs) return;
         let sessionMcqs: MCQ[] = [];
-        if (mode === 'weakness' && generatedMcqIds?.length) {
+
+        if ((mode === 'weakness' || mode === 'quiz') && locationState.generatedMcqIds?.length) {
             const mcqMap = new Map(appData.mcqs.map(m => [m.id, m]));
-            sessionMcqs = Array.from(new Set(generatedMcqIds)).map(id => mcqMap.get(id)!).filter(Boolean) as MCQ[];
-        } else if (mode === 'incorrect' && incorrectMcqIds?.length) {
+            sessionMcqs = Array.from(new Set(locationState.generatedMcqIds)).map(id => mcqMap.get(id)!).filter(Boolean) as MCQ[];
+        } else if (mode === 'incorrect' && locationState.incorrectMcqIds?.length) {
             const mcqMap = new Map(appData.mcqs.map(m => [m.id, m]));
-            sessionMcqs = Array.from(new Set(incorrectMcqIds)).map(id => mcqMap.get(id)!).filter(Boolean) as MCQ[];
+            sessionMcqs = Array.from(new Set(locationState.incorrectMcqIds)).map(id => mcqMap.get(id)!).filter(Boolean) as MCQ[];
+        } else if (mode === 'custom' && locationState.selectedChapterIds?.length && locationState.questionCount) {
+            const availableMcqs = appData.mcqs.filter(mcq => locationState.selectedChapterIds!.includes(mcq.chapterId));
+            sessionMcqs = availableMcqs.sort(() => 0.5 - Math.random()).slice(0, locationState.questionCount);
         } else if (id) {
-            sessionMcqs = appData.mcqs.filter(mcq => mcq.chapterId === id).sort(() => Math.random() - 0.5);
+            sessionMcqs = appData.mcqs.filter(mcq => mcq.chapterId === id).sort(() => 0.5 - Math.random());
         }
+
         setMcqs(sessionMcqs);
         setCurrentIndex(0);
         setAnswers({});
         setMarkedForReview(new Set());
-        setSessionStreak(0);
+        sessionStorage.removeItem(`pediaquiz_marked_questions_${id}_${mode}`);
         setIsFinished(false);
-    }, [appData, id, mode, generatedMcqIds, incorrectMcqIds]);
+    }, [appData, id, mode, locationState]);
+
+    useEffect(() => {
+        try {
+            sessionStorage.setItem(`pediaquiz_marked_questions_${id}_${mode}`, JSON.stringify(Array.from(markedForReview)));
+        } catch (error) {
+            console.error("Failed to save marked questions to session storage:", error);
+        }
+    }, [markedForReview, id, mode]);
 
     const currentMcq = useMemo(() => mcqs[currentIndex], [mcqs, currentIndex]);
-    const isQuizMode = useMemo(() => mode === 'quiz' || mode === 'mock' || mode === 'custom' || mode === 'weakness', [mode]);
-    const showAnswer = useMemo(() => !isQuizMode || isFinished || mode === 'incorrect', [isQuizMode, isFinished, mode]);
+    const isQuizMode = useMemo(() => mode !== 'practice' && mode !== 'incorrect', [mode]);
+    const showAnswer = useMemo(() => !isQuizMode || isFinished, [isQuizMode, isFinished]);
     const isBookmarked = useMemo(() => !!(bookmarks && currentMcq && bookmarks.includes(currentMcq.id)), [bookmarks, currentMcq]);
 
     const handleSelectOption = useCallback((option: string) => {
@@ -168,19 +187,19 @@ const MCQSessionPage: React.FC = () => {
 
         setAnswers(prev => ({ ...prev, [currentIndex]: option }));
         
-        if (user && attemptedMCQs && mode !== 'incorrect') {
+        if (user && attemptedMCQs) {
             addAttemptMutation.mutate({ mcqId: currentMcq.id, isCorrect: wasCorrect });
         }
         
         if (isQuizMode && currentIndex < mcqs.length - 1) {
             setTimeout(() => setCurrentIndex(i => i + 1), 300);
         }
-    }, [answers, currentIndex, currentMcq, user, attemptedMCQs, isQuizMode, mcqs.length, addAttemptMutation, mode, getCorrectAnswerText]);
+    }, [answers, currentIndex, currentMcq, user, attemptedMCQs, isQuizMode, mcqs.length, addAttemptMutation, mode]);
 
     const finishSession = useCallback(() => {
         if (isFinished || !user) return;
         setIsFinished(true);
-        setMarkedForReview(new Set());
+        sessionStorage.removeItem(`pediaquiz_marked_questions_${id}_${mode}`);
 
         if (isQuizMode) {
             const results: QuizResult['results'] = mcqs.map((mcq, index) => {
@@ -191,73 +210,71 @@ const MCQSessionPage: React.FC = () => {
             });
 
             const score = results.filter(r => r.isCorrect).length;
+            const quizResultPayload = {
+                results, score, totalQuestions: mcqs.length,
+                source: mode || 'unknown', chapterId: id,
+            };
 
-            addQuizResultMutation.mutate({
-                results,
-                score,
-                totalQuestions: mcqs.length,
-                source: mode || 'unknown',
-                chapterId: id,
+            addQuizResultMutation.mutate(quizResultPayload, {
+                onSuccess: (data) => {
+                    const newQuizResultId = data.data.id;
+                    navigate(location.pathname + '/results', { state: { result: { ...quizResultPayload, id: newQuizResultId } }, replace: true });
+                    addToast("Quiz submitted! Review your answers.", "success");
+                },
+                onError: (error) => {
+                    addToast(`Failed to save quiz results: ${error.message}`, "error");
+                    // Still navigate to show results, but without an ID
+                    navigate(location.pathname + '/results', { state: { result: quizResultPayload }, replace: true });
+                }
             });
-            addToast("Quiz submitted! Review your answers.", "success");
         } else {
             addToast("Session complete!", "info");
+            navigate(`/chapters/${currentMcq?.topicId}/${currentMcq?.chapterId}`);
         }
-    }, [isFinished, user, isQuizMode, mcqs, answers, addQuizResultMutation, mode, id, addToast, getCorrectAnswerText]);
+    }, [isFinished, user, isQuizMode, mcqs, answers, addQuizResultMutation, mode, id, addToast, navigate, currentMcq]);
     
     const handleDelete = () => {
         if (!user?.isAdmin || !currentMcq) return;
-        let collectionName: 'MasterMCQ' | 'MarrowMCQ';
-        if (currentMcq.source?.toLowerCase().includes('marrow')) {
-            collectionName = 'MarrowMCQ';
-        } else {
-            collectionName = 'MasterMCQ';
-        }
+        const collectionName: 'MasterMCQ' | 'MarrowMCQ' = currentMcq.source?.toLowerCase().includes('marrow') ? 'MarrowMCQ' : 'MasterMCQ';
         deleteMcqMutation.mutate({ id: currentMcq.id, type: 'mcq', collectionName });
         setIsDeleteModalOpen(false);
     };
 
     const handleToggleBookmark = () => { if (currentMcq) toggleBookmarkMutation.mutate({ contentId: currentMcq.id, contentType: 'mcq' }); };
 
-    const goToQuestion = (index: number) => {
-        if (index >= 0 && index < mcqs.length) {
-            setCurrentIndex(index);
-        }
-    };
+    const goToQuestion = (index: number) => { if (index >= 0 && index < mcqs.length) { setCurrentIndex(index); } };
     const handleNext = () => (currentIndex < mcqs.length - 1) ? goToQuestion(currentIndex + 1) : finishSession();
     const handlePrevious = () => goToQuestion(currentIndex - 1);
     const toggleMarkForReview = useCallback(() => {
         setMarkedForReview(prev => { 
             const newSet = new Set(prev); 
-            if (newSet.has(currentIndex)) newSet.delete(currentIndex);
-            else newSet.add(currentIndex);
+            newSet.has(currentIndex) ? newSet.delete(currentIndex) : newSet.add(currentIndex);
             return newSet; 
         });
     }, [currentIndex]);
 
     const finalResult = useMemo(() => {
-        if (!isFinished || !isQuizMode) return null;
-        const results: QuizResult['results'] = mcqs.map((mcq, index) => {
-            const selectedAnswer = answers[index] || null;
-            const correctAnswerText = getCorrectAnswerText(mcq);
-            const isCorrect = selectedAnswer === correctAnswerText;
-            return { mcqId: mcq.id, isCorrect, selectedAnswer, correctAnswer: correctAnswerText };
-        });
-        const score = results.filter(r => r.isCorrect).length;
-        const scoreWithPenalty = results.reduce((acc, r) => {
+        if (!location.pathname.endsWith('/results')) return null;
+        
+        const resultFromState = location.state?.result as Omit<QuizResult, 'date' | 'userId'> & { id?: string };
+        if (!resultFromState) return null;
+
+        const scoreWithPenalty = resultFromState.results.reduce((acc, r) => {
             if (r.selectedAnswer === null) return acc;
             return r.isCorrect ? acc + 4 : acc - 1;
         }, 0);
-        return { results, score, totalQuestions: mcqs.length, scoreWithPenalty, source: mode, chapterId: id };
-    }, [isFinished, isQuizMode, mcqs, answers, mode, id, getCorrectAnswerText]);
+
+        return { ...resultFromState, scoreWithPenalty };
+    }, [location.pathname, location.state]);
 
     if (isAppDataLoading) return <Loader message="Loading Session..." />;
+    
+    if (finalResult) {
+        return <QuizResultsPage result={finalResult} mcqs={mcqs.filter(mcq => finalResult.results.some(r => r.mcqId === mcq.id))} onReview={() => navigate(`/session/${mode}/${id}`)} />;
+    }
+    
     if (mcqs.length === 0) return <div className="text-center p-8">No questions available for this session.</div>;
     if (!currentMcq) return <div className="text-center p-8">Loading question...</div>;
-
-    if (finalResult) {
-        return <QuizResultsPage result={finalResult} mcqs={mcqs} onReview={() => { setIsFinished(true); setCurrentIndex(0); }} />;
-    }
 
     const optionsArray = Array.isArray(currentMcq.options) ? currentMcq.options : [];
 

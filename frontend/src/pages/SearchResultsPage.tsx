@@ -1,3 +1,4 @@
+// frontend/src/pages/SearchResultsPage.tsx
 import React, { useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useData } from '@/contexts/DataContext';
@@ -9,30 +10,35 @@ const SearchResultsPage: React.FC = () => {
     const { state } = useLocation();
     const { data: appData, isLoading } = useData();
     const query = state?.query || '';
+    const allTerms: string[] = state?.allTerms || (query ? [query] : []);
 
     const searchResults = useMemo(() => {
-        if (!appData) return [];
+        if (!appData || allTerms.length === 0) return [];
 
-        const lowerCaseQuery = query.toLowerCase();
-        if (lowerCaseQuery.length < 3) return [];
+        const lowerCaseTerms = allTerms.map(term => term.toLowerCase());
         
         const matchingMcqs = (appData.mcqs || []).filter((mcq: MCQ) => {
-            // CRITICAL FIX: Ensure mcq.options is an array before calling .some()
             const optionsIsArray = Array.isArray(mcq.options);
-            return (
-                mcq.question.toLowerCase().includes(lowerCaseQuery) ||
-                (optionsIsArray && mcq.options.some(opt => opt.toLowerCase().includes(lowerCaseQuery))) ||
-                (mcq.explanation || '').toLowerCase().includes(lowerCaseQuery)
-            );
+            const contentString = [
+                mcq.question,
+                ...(optionsIsArray ? mcq.options : []),
+                mcq.explanation || ''
+            ].join(' ').toLowerCase();
+
+            return lowerCaseTerms.some(term => contentString.includes(term));
         });
 
-        const matchingFlashcards = (appData.flashcards || []).filter((fc: Flashcard) => 
-            fc.front.toLowerCase().includes(lowerCaseQuery) ||
-            fc.back.toLowerCase().includes(lowerCaseQuery)
-        );
+        const matchingFlashcards = (appData.flashcards || []).filter((fc: Flashcard) => {
+             const contentString = [
+                fc.front,
+                fc.back
+            ].join(' ').toLowerCase();
+            
+            return lowerCaseTerms.some(term => contentString.includes(term));
+        });
         
         return [...matchingMcqs, ...matchingFlashcards];
-    }, [appData, query]);
+    }, [appData, allTerms]);
 
     if (isLoading) return <Loader message={`Searching for "${query}"...`} />;
 
@@ -41,6 +47,11 @@ const SearchResultsPage: React.FC = () => {
             <h1 className="text-3xl font-bold">
                 Search Results for <span className="text-sky-500">"{query}"</span>
             </h1>
+            {allTerms.length > 1 && (
+                <p className="text-sm text-slate-400">
+                    Including related terms: {allTerms.slice(1).join(', ')}
+                </p>
+            )}
             <p className="text-slate-500">{searchResults.length} result(s) found.</p>
 
             {searchResults.length === 0 ? (

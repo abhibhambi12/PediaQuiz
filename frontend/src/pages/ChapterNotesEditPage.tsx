@@ -1,26 +1,30 @@
+// frontend/src/pages/ChapterNotesEditPage.tsx
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query'; // Removed useQuery
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useData } from '@/contexts/DataContext';
 import { updateChapterNotes } from '@/services/aiService';
 import Loader from '@/components/Loader';
 import { useToast } from '@/components/Toast';
+import { Topic, Chapter } from '@pediaquiz/types';
 
 const ChapterNotesEditPage: React.FC = () => {
     const { topicId, chapterId } = useParams<{ topicId: string; chapterId: string }>();
     const navigate = useNavigate();
+    const location = useLocation();
     const { addToast } = useToast();
     const queryClient = useQueryClient();
     const { data: appData, isLoading: isAppDataLoading, error: appDataError } = useData();
 
     const { chapter, topic } = React.useMemo(() => {
         if (!appData) return { chapter: null, topic: null };
-        const foundTopic = appData.topics.find(t => t.id === topicId && t.source === 'Marrow');
-        const foundChapter = foundTopic?.chapters.find(ch => ch.id === chapterId);
-        return { chapter: foundChapter, topic: foundTopic };
+        const foundTopic = appData.topics.find((t: Topic) => t.id === topicId);
+        const foundChapter = foundTopic?.chapters.find((ch: Chapter) => ch.id === chapterId);
+        return { chapter: foundChapter || null, topic: foundTopic || null };
     }, [appData, topicId, chapterId]);
 
-    const [notesContent, setNotesContent] = useState<string>(chapter?.summaryNotes || '');
+    const [notesContent, setNotesContent] = useState<string>('');
+    const source = location.state?.source as 'General' | 'Marrow' | undefined;
 
     useEffect(() => {
         if (chapter) {
@@ -28,20 +32,31 @@ const ChapterNotesEditPage: React.FC = () => {
         }
     }, [chapter]);
 
-    const updateNotesMutation = useMutation<any, Error, { topicId: string; chapterId: string; newSummary: string }>({
+    const updateNotesMutation = useMutation<any, Error, { topicId: string; chapterId: string; newSummary: string, source: 'General' | 'Marrow' }>({
         mutationFn: updateChapterNotes,
         onSuccess: () => {
             addToast("Chapter notes saved successfully!", 'success');
-            queryClient.invalidateQueries({ queryKey: ['appData'] }); // Invalidate to refetch updated notes
-            navigate(`/chapters/${topicId}/${chapterId}`); // Go back to chapter detail page
+            queryClient.invalidateQueries({ queryKey: ['appData'] });
+            navigate(`/chapters/${topicId}/${chapterId}`);
         },
         onError: (error) => addToast(`Failed to save notes: ${error.message}`, 'error'),
     });
+    
+    const handleSave = () => {
+        if (!topic || !chapter || !source) {
+            addToast("Cannot save: missing topic, chapter, or source information.", "error");
+            return;
+        }
+        updateNotesMutation.mutate({ topicId: topic.id, chapterId: chapter.id, newSummary: notesContent, source });
+    };
 
     if (isAppDataLoading) return <Loader message="Loading chapter for notes..." />;
     if (appDataError) return <div className="text-center py-10 text-red-500">Error: {appDataError.message}</div>;
     if (!chapter || !topic) {
         return <div className="text-center py-10">Chapter or Topic not found.</div>;
+    }
+    if (!source) {
+        return <div className="text-center py-10 text-red-500">Error: Source for this topic was not provided. Cannot edit notes.</div>;
     }
 
     return (
@@ -51,7 +66,7 @@ const ChapterNotesEditPage: React.FC = () => {
 
             <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md">
                 <textarea
-                    className="w-full h-96 p-4 border border-slate-300 dark:border-slate-600 rounded-md dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-800 dark:text-slate-200"
+                    className="w-full h-96 p-4 border border-slate-300 dark:border-slate-600 rounded-md dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500"
                     value={notesContent}
                     onChange={(e) => setNotesContent(e.target.value)}
                     placeholder="Start typing your chapter summary notes here using Markdown..."
@@ -65,7 +80,7 @@ const ChapterNotesEditPage: React.FC = () => {
                         Cancel
                     </button>
                     <button
-                        onClick={() => updateNotesMutation.mutate({ topicId: topic.id, chapterId: chapter.id, newSummary: notesContent })}
+                        onClick={handleSave}
                         disabled={updateNotesMutation.isPending}
                         className="px-6 py-2 rounded-md bg-sky-500 text-white font-bold hover:bg-sky-600 transition-colors disabled:opacity-50"
                     >

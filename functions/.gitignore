@@ -9,3 +9,38 @@ node_modules/
 *.local
 # In your root .gitignore file, add this line at the end:
 functions/dist
+# Dependencies
+/node_modules
+/frontend/node_modules
+/functions/node_modules
+/packages/types/node_modules
+
+# Environment Variables - VERY IMPORTANT FOR SECURITY
+# Do not commit your API keys!
+.env
+.env.*
+/frontend/.env
+/frontend/.env.*
+
+# Build output
+/frontend/dist
+/functions/lib
+/packages/types/lib
+*.tsbuildinfo
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+
+# IDE configuration
+.idea/
+.vscode/

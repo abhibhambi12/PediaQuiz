@@ -11,6 +11,7 @@
 # Env files
 .env.local
 .env.*.local
+.env
 
 # IDE / System files
 .DS_Store

@@ -7,8 +7,11 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "isolatedModules": false, // False for root, true for some specific nested modules (Vite, etc.)
+    "isolatedModules": false,
     "moduleResolution": "node",
-    "baseUrl": "." // Important for path mapping
+    "baseUrl": ".",
+    "paths": {
+      "@pediaquiz/types": ["packages/types/src"]
+    }
   }
 }

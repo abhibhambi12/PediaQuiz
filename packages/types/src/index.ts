@@ -18,11 +18,11 @@ export interface Chapter {
     mcqCount: number;
     flashcardCount: number;
     topicId: string;
-    sourceUploadIds?: string[]; // Added for Marrow
-    originalTextRefIds?: string[]; // Added for Marrow
-    summaryNotes?: string | null; // Added for Marrow
-    source?: 'General' | 'Marrow'; // Added for Marrow
-    topicName?: string; // Added for Marrow
+    sourceUploadIds?: string[];
+    originalTextRefIds?: string[]; // For Universal Notes
+    summaryNotes?: string | null;   // For Universal Notes
+    source?: 'General' | 'Marrow';
+    topicName?: string;
 }
 
 export interface Topic {
@@ -32,7 +32,7 @@ export interface Topic {
     chapterCount: number;
     totalMcqCount: number;
     totalFlashcardCount: number;
-    source?: 'General' | 'Marrow'; // Added for Marrow
+    source?: 'General' | 'Marrow';
 }
 
 // --- STUDY MATERIALS ---
@@ -42,12 +42,12 @@ export interface MCQ {
     id: string;
     question: string;
     options: string[];
-    answer: string; // Can be 'A', 'B', 'C', 'D' or the full text answer
+    answer: string;
     explanation: string;
-    topic: string; // Raw topic name from Firestore document (can be deprecated for topicName)
-    topicId: string; // Normalized topic ID
-    chapter: string; // Raw chapter name from Firestore document (can be deprecated for chapterName)
-    chapterId: string; // Normalized chapter ID
+    topic: string;
+    topicId: string;
+    chapter: string;
+    chapterId: string;
     creatorId: string;
     createdAt: Date;
     source?: 'Marrow' | 'PediaQuiz' | 'Master' | 'AI_Generated_Chat' | 'AI_Generated' | 'Marrow_AI_Generated' | 'PediaQuiz_AI_Generated';
@@ -60,10 +60,10 @@ export interface Flashcard {
     id: string;
     front: string;
     back: string;
-    topic: string; // Raw topic name from Firestore document - retained for now
-    chapter: string; // Raw chapter name from Firestore document - retained for now
-    topicId: string; // Normalized topic ID
-    chapterId: string; // Normalized chapter ID
+    topic: string;
+    chapter: string;
+    topicId: string;
+    chapterId: string;
     creatorId: string;
     createdAt: Date;
     source?: 'Marrow' | 'PediaQuiz' | 'Master' | 'AI_Generated' | string;
@@ -90,39 +90,45 @@ export interface QuizResult {
     score: number;
     totalQuestions: number;
     date: Date;
-    source: string; // e.g., 'quiz', 'practice', 'custom', 'weakness'
-    chapterId?: string; // Optional, if quiz was chapter-specific
+    source: string;
+    chapterId?: string;
 }
 
+// Spaced Repetition fields added to Attempt
 export interface Attempt {
-    attempts: number; correct: number; incorrect: number; isCorrect: boolean; lastAttempted: Date;
-    interval?: number; easeFactor?: number; nextReview?: Date;
+    attempts: number;
+    correct: number;
+    incorrect: number;
+    isCorrect: boolean;
+    lastAttempted: Date;
+    interval?: number;      // Days until next review
+    easeFactor?: number;    // SM-2 algorithm ease factor
+    nextReviewDate?: Date;  // The calculated next review date
 }
 export interface AttemptedMCQs { [mcqId: string]: Attempt; }
 
-// NEW: AwaitingReviewData structure for final content review
 export interface AwaitingReviewData {
     mcqs: MCQ[];
     flashcards: Flashcard[];
 }
 
 // --- AI & ADMIN ---
-// CRITICAL FIX: Expanded UploadStatus to include all states from the General Pipeline
 export type UploadStatus =
     | 'pending_upload'
     | 'pending_ocr'
     | 'failed_ocr'
-    | 'processed' // OCR complete
-    | 'pending_classification' // General: AI suggesting topic/chapter
-    | 'pending_approval' // General: Admin approves suggested topic/chapter
-    | 'batch_ready' // General: Batches prepared for generation
-    | 'generating_batch' // General: Automated generation in progress
-    | 'pending_final_review' // General: Generation complete, awaiting final admin review/assignment
-    | 'pending_generation_decision' // Marrow: Extraction complete, awaiting generation decision
-    | 'pending_assignment' // Marrow: Generation complete, awaiting assignment
-    | 'pending_assignment_review' // General: AI auto-assignment complete, awaiting admin review
-    | 'completed' // Content approved and saved
-    | 'error' // General error state
+    | 'processed'
+    | 'pending_classification'
+    | 'pending_approval'
+    | 'batch_ready'
+    | 'generating_batch'
+    | 'pending_final_review'
+    | 'pending_marrow_generation_approval' // New status for Smart Marrow Pipeline
+    | 'pending_generation_decision'
+    | 'pending_assignment'
+    | 'pending_assignment_review'
+    | 'completed'
+    | 'error'
     | 'failed_unsupported_type'
     | 'archived'
     | 'failed_ai_extraction'
@@ -146,59 +152,55 @@ export interface UserUpload {
     };
     suggestedKeyTopics?: string[];
 
-    // NEW: General Pipeline specific properties
-    title?: string; // For the general document title
-    sourceReference?: string; // For general source reference
-    suggestedTopic?: string; // AI suggested topic for general
-    suggestedChapter?: string; // AI suggested chapter for general
-    estimatedMcqCount?: number; // AI estimated MCQs for general
-    estimatedFlashcardCount?: number; // AI estimated Flashcards for general
+    // Smart Marrow Text Pipeline specific fields
+    suggestedNewMcqCount?: number;
+
+    // General Pipeline specific properties
+    title?: string;
+    sourceReference?: string;
+    suggestedTopic?: string;
+    suggestedChapter?: string;
+    estimatedMcqCount?: number;
+    estimatedFlashcardCount?: number;
     
     // For batch generation in General Pipeline
-    totalMcqCount?: number; // Total requested MCQs for batch
-    totalFlashcardCount?: number; // Total requested Flashcards for batch
-    batchSize?: number; // Size of each batch
-    totalBatches?: number; // Total number of chunks/batches
-    completedBatches?: number; // Number of batches completed
-    textChunks?: string[]; // The document split into chunks for batch processing
-    generatedContent?: Array<{ batchNumber: number; mcqs: Partial<MCQ>[]; flashcards: Partial<Flashcard>[]; }>; // Generated content per batch
+    totalMcqCount?: number;
+    totalFlashcardCount?: number;
+    batchSize?: number;
+    totalBatches?: number;
+    completedBatches?: number;
+    textChunks?: string[];
+    generatedContent?: Array<{ batchNumber: number; mcqs: Partial<MCQ>[]; flashcards: Partial<Flashcard>[]; }>;
 
-    finalAwaitingReviewData?: AwaitingReviewData; // Final combined content for review
+    finalAwaitingReviewData?: AwaitingReviewData;
 
-    approvedTopic?: string; // Manually approved topic for general
-    approvedChapter?: string; // Manually approved chapter for general
+    approvedTopic?: string;
+    approvedChapter?: string;
 
-    assignmentSuggestions?: AssignmentSuggestion[]; // AI suggested assignments per chunk
-    existingQuestionSnippets?: string[]; // For negative constraints during regeneration
+    assignmentSuggestions?: AssignmentSuggestion[];
+    existingQuestionSnippets?: string[];
 }
 
 export interface ChatMessage { id: string; text: string; sender: 'user' | 'assistant'; timestamp: Date; }
 
-// Corrected type definition for AssignmentSuggestion based on new backend data
 export interface AssignmentSuggestion {
-    topicName: string; // Topic name for assignment
-    chapterName: string; // Chapter name for assignment
-    isNewChapter: boolean; // True if this is a new chapter for the topic
-    mcqs?: MCQ[]; // The actual MCQs assigned to this group
-    flashcards?: Flashcard[]; // The actual Flashcards assigned to this group
-    // The original `topicId` and `chapterId` from AI models are often just names, 
-    // using `topicName` and `chapterName` consistently for assignments is clearer.
+    topicName: string;
+    chapterName: string;
+    isNewChapter: boolean;
+    mcqs?: MCQ[];
+    flashcards?: Flashcard[];
 }
 
-
-// Data passed to toggleBookmark callable function
 export type ToggleBookmarkCallableData = {
     contentId: string;
     contentType: 'mcq' | 'flashcard';
 };
 
-// Data passed to deleteContentItem callable function
 export type DeleteContentItemCallableData = {
     id: string;
     type: 'mcq' | 'flashcard';
     collectionName: 'MasterMCQ' | 'MarrowMCQ' | 'Flashcards';
 };
-
 
 // --- UTILITY ---
 export type AppData = { 
@@ -206,5 +208,5 @@ export type AppData = {
     mcqs: MCQ[]; 
     flashcards: Flashcard[]; 
     labValues: LabValue[];
-    keyClinicalTopics: string[];
+    keyClinicalTopics: string[]; // Fix: Added missing property
 };

@@ -1,7 +1,8 @@
+// frontend/src/pages/CustomTestBuilder.tsx
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useData } from '@/contexts/DataContext';
-import { ChevronDownIcon, ChevronRightIcon } from '@/components/Icons';
+import { ChevronDownIcon } from '@/components/Icons';
 import Loader from '@/components/Loader';
 import type { Chapter, Topic, MCQ } from '@pediaquiz/types';
 
@@ -13,7 +14,6 @@ const CustomTestBuilder: React.FC = () => {
   const [totalQuestions, setTotalQuestions] = useState<number>(20);
   const [expandedTopics, setExpandedTopics] = useState<Set<string>>(new Set());
 
-  // Safer destructuring with fallback
   const topics = appData?.topics || [];
   const allMcqs = appData?.mcqs || [];
 
@@ -60,16 +60,15 @@ const CustomTestBuilder: React.FC = () => {
     }
     const availableQuestions = allMcqs.filter((mcq: MCQ) => chapterIds.includes(mcq.chapterId));
     if (availableQuestions.length < totalQuestions) {
-        alert(`You requested ${totalQuestions} questions, but only ${availableQuestions.length} are available in the selected chapters. Please reduce the question count or select more chapters.`);
+        alert(`You requested ${totalQuestions} questions, but only ${availableQuestions.length} are available. Please reduce the question count or select more chapters.`);
         return;
     }
     
-    // In a future step, we'll make this session page fully functional
-    navigate(`/session/custom/exam`, { 
+    // Pass the necessary data to the MCQSessionPage via location state
+    navigate(`/session/custom/exam_${Date.now()}`, { 
       state: {
         selectedChapterIds: chapterIds,
-        questionCount: totalQuestions,
-        title: "Custom Exam"
+        questionCount: totalQuestions
       }
     });
   };
@@ -116,24 +115,41 @@ const CustomTestBuilder: React.FC = () => {
             const isTopicExpanded = expandedTopics.has(topic.id);
             const chaptersInTopic = topic.chapters;
             const allInTopicSelected = chaptersInTopic.length > 0 && chaptersInTopic.every(c => selectedChapters.has(c.id));
+            const selectedInTopicCount = chaptersInTopic.filter(c => selectedChapters.has(c.id)).length;
+            const isIndeterminate = selectedInTopicCount > 0 && selectedInTopicCount < chaptersInTopic.length;
+
             return (
               <div key={topic.id} className="border border-slate-200 dark:border-slate-700 rounded-lg">
                 <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/50">
                   <div className="flex items-center gap-2">
-                    <input type="checkbox" id={`topic-${topic.id}`} checked={allInTopicSelected} onChange={() => handleTopicToggle(chaptersInTopic)} className="form-checkbox h-5 w-5 text-sky-600 rounded focus:ring-sky-500" />
+                    <input
+                      type="checkbox"
+                      id={`topic-${topic.id}`}
+                      checked={allInTopicSelected}
+                      ref={el => el && (el.indeterminate = isIndeterminate)} // Indeterminate state for checkboxes
+                      onChange={() => handleTopicToggle(chaptersInTopic)}
+                      className="form-checkbox h-5 w-5 text-sky-600 rounded focus:ring-sky-500"
+                    />
                     <label htmlFor={`topic-${topic.id}`} className="font-medium cursor-pointer select-none">{topic.name}</label>
                   </div>
-                  <button onClick={() => toggleTopicExpand(topic.id)} className="p-1">{isTopicExpanded ? <ChevronDownIcon /> : <ChevronRightIcon />}</button>
+                  <button onClick={() => toggleTopicExpand(topic.id)} className="p-1">
+                    <ChevronDownIcon className={`transition-transform duration-200 ${isTopicExpanded ? 'rotate-180' : ''}`} />
+                  </button>
                 </div>
                 {isTopicExpanded && (
                   <div className="p-4 border-t border-slate-200 dark:border-slate-700">
                     <ul className="space-y-2">
                       {chaptersInTopic.map((chapter: Chapter) => (
                         <li key={chapter.id}>
-                          <div className="flex items-center gap-2">
-                            <input type="checkbox" id={`chapter-${chapter.id}`} checked={selectedChapters.has(chapter.id)} onChange={() => handleChapterToggle(chapter.id)} className="form-checkbox h-5 w-5 text-sky-600 rounded focus:ring-sky-500" />
-                            <label htmlFor={`chapter-${chapter.id}`} className="cursor-pointer select-none">{chapter.name} ({chapter.mcqCount} MCQs)</label>
-                          </div>
+                          <label className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={selectedChapters.has(chapter.id)}
+                              onChange={() => handleChapterToggle(chapter.id)}
+                              className="form-checkbox h-5 w-5 text-sky-600 rounded focus:ring-sky-500"
+                            />
+                            <span>{chapter.name} ({chapter.mcqCount} MCQs)</span>
+                          </label>
                         </li>
                       ))}
                     </ul>

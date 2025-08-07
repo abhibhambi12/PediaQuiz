@@ -13,6 +13,7 @@ import Header from "./components/Header";
 import BottomNav from "./components/BottomNav";
 import AdminRoute from "./components/AdminRoute";
 import Loader from "./components/Loader";
+import FloatingActionButton from "./components/FloatingActionButton"; // Import the new component
 
 // Import Pages
 import HomePage from "./pages/HomePage";
@@ -23,7 +24,7 @@ import ChapterDetailPage from "./pages/ChapterDetailPage";
 import CustomTestBuilder from "./pages/CustomTestBuilder";
 import ChatPage from "./pages/ChatPage";
 import MarrowQBankPage from "./pages/MarrowQBankPage";
-import AdminReviewPage from "./pages/AdminReviewPage"; // The component itself
+import AdminReviewPage from "./pages/AdminReviewPage";
 import AdminMarrowPage from "./pages/AdminMarrowPage";
 import LogScreenPage from "./pages/LogScreenPage";
 import StatsPage from "./pages/StatsPage";
@@ -42,6 +43,7 @@ const AppLayout: React.FC = () => (
     <main className="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8 mb-20">
       <Outlet />
     </main>
+    <FloatingActionButton /> {/* Add the button here */}
     <BottomNav />
   </div>
 );
@@ -97,7 +99,6 @@ const AppContent: React.FC = () => {
             </AdminRoute>
           }
         />
-        {/* CORRECT: AdminReviewPage is a container, it fetches its own data, so no props here. */}
         <Route
           path="/admin/review"
           element={

@@ -1,33 +1,24 @@
-# Service account keys and environment files
-*.json
-.env
-pediaquizapp-firebase-adminsdk.json
+# Dependencies
+node_modules
+/node_modules
+**/node_modules
 
-# Specific exceptions for files that SHOULD be committed
-!firebase.json
-!package.json
-!package-lock.json
-!tsconfig.json
-!tsconfig.base.json
-!cors.json
-!apphosting.emulator.yaml
-!frontend/package.json
-!functions/package.json
-!packages/types/package.json
-!frontend/tsconfig.json
-!frontend/tsconfig.node.json
-!functions/tsconfig.json
-!packages/types/tsconfig.json
+# Build Artifacts
+*.tgz
+/packages/types/lib
+/functions/lib
+/frontend/dist
 
-# Node dependencies
-node_modules/
-**/node_modules/
-
-# Build outputs & logs
-dist/
-lib/
-/functions/lib/
+# Logs
+logs
 *.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# IDE / OS files
 .DS_Store
-# In your root .gitignore file, add this line at the end:
-functions/dist
+.idea
+.vscode/
