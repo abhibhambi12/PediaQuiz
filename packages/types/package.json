@@ -2,8 +2,18 @@
   "name": "@pediaquiz/types",
   "version": "1.0.0",
   "description": "Shared TypeScript types for the PediaQuiz monorepo",
-  "main": "lib/index.js",
-  "types": "lib/index.d.ts",
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
+  "files": [
+    "lib"
+  ],
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "require": "./lib/index.js",
+      "default": "./lib/index.js"
+    }
+  },
   "scripts": {
     "build": "npx tsc --build"
   },

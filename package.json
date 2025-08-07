@@ -7,11 +7,10 @@
     "packages/types"
   ],
   "scripts": {
-    "preinstall": "npm run build --workspace=@pediaquiz/types && (cd packages/types && npm pack)",
-    "build": "npm run build --workspaces --if-present",
+    "build": "npm run build -w @pediaquiz/types && npm run build --workspaces --if-present",
     "build:functions": "npm run build --workspace=functions",
     "dev": "npm run dev --workspace=frontend",
-    "clean": "rm -rf node_modules && find . -name 'node_modules' -type d -prune -exec rm -rf '{}' + && find . -name 'package-lock.json' -type f -delete && find . -name '*.tgz' -type f -delete && npm cache clean --force",
+    "clean": "rm -rf node_modules && find . -name 'node_modules' -type d -prune -exec rm -rf '{}' + && find . -name 'package-lock.json' -type f -delete && npm cache clean --force",
     "firebase": "firebase",
     "deploy": "firebase deploy",
     "deploy:functions": "bash ./deploy-functions.sh",
