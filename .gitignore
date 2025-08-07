@@ -1,13 +1,20 @@
 # Dependencies
-node_modules
 /node_modules
-**/node_modules
+/frontend/node_modules
+/functions/node_modules
+/packages/types/node_modules
 
-# Build Artifacts
-*.tgz
-/packages/types/lib
-/functions/lib
+# Environment Variables - VERY IMPORTANT FOR SECURITY
+.env
+.env.*
+/frontend/.env
+/frontend/.env.*
+
+# Build output
 /frontend/dist
+/functions/lib
+/packages/types/lib
+*.tsbuildinfo
 
 # Logs
 logs
@@ -18,7 +25,10 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# IDE / OS files
+# OS-generated files
 .DS_Store
-.idea
+Thumbs.db
+
+# IDE configuration
+.idea/
 .vscode/
