@@ -1,9 +1,19 @@
 {
   "functions": [
     {
-      "source": "functions/dist",
+      "source": "functions",
       "codebase": "default",
-      "ignore": [],
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log"
+      ],
+      "predeploy": [
+        "npm install --prefix \"$RESOURCE_DIR/../\"",
+        "(cd \"$RESOURCE_DIR/../packages/types\" && npm install && npm run build)",
+        "npm --prefix \"$RESOURCE_DIR\" install"
+      ],
       "runtime": "nodejs20"
     }
   ],
