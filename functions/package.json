@@ -18,7 +18,7 @@
     "firebase-functions": "^5.0.1"
   },
   "devDependencies": {
-    "@pediaquiz/types": "file:../packages/types",
+    "@pediaquiz/types": "file:../packages/types/pediaquiz-types-1.0.0.tgz",
     "typescript": "^5.4.5"
   },
   "private": true

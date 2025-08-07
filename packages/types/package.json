@@ -1,11 +1,11 @@
 {
-  "name": "@pediaquiz/types",
+  "name": "packages/types",
   "version": "1.0.0",
   "description": "Shared TypeScript types for the PediaQuiz monorepo",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "scripts": {
-    "build": "npx tsc --build"
+    "build": "npx tsc"
   },
   "keywords": [],
   "author": "",

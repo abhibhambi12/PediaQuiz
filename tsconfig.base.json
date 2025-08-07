@@ -9,9 +9,6 @@
     "resolveJsonModule": true,
     "isolatedModules": false,
     "moduleResolution": "node",
-    "baseUrl": ".",
-    "paths": {
-      "@pediaquiz/types": ["packages/types/src"]
-    }
+    "baseUrl": "."
   }
 }
