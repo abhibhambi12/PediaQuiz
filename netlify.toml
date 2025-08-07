@@ -3,8 +3,8 @@
   base = "/"
   # The publish directory for the final build artifacts.
   publish = "frontend/dist"
-  # This command ensures all dependencies are installed and the entire monorepo is built.
-  command = "npm install && npm run build"
+  # This multi-step command is the definitive fix.
+  command = "(cd packages/types && npm install && npm run build && npm pack) && npm install && npm run build"
 
 [build.environment]
   # Specify the Node.js version to match your local and Firebase environments.
