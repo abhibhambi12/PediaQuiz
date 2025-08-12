@@ -1,9 +1,9 @@
 {
   "files": [],
   "references": [
-    { "path": "./packages/types" },
-    { "path": "./functions" },
-    { "path": "./frontend" }
+    { "path": "./workspaces/types" },
+    { "path": "./workspaces/functions" },
+    { "path": "./workspaces/frontend" }
   ],
   "compilerOptions": {
     "composite": true,

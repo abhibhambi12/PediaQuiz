@@ -2,10 +2,73 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // You are the only user, so if you are authenticated, you have full access.
+    
+    // By default, nobody can read or write to any document.
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if false;
+    }
+    
+    // --- User Data ---
+    // Users can read and write to their own profile document and its subcollections.
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // --- Content Collections ---
+    // All authenticated users can read content. Only admins can write.
+    function canReadContent() {
+      return request.auth != null;
+    }
+    function isAdmin() {
+      return request.auth != null && request.auth.token.isAdmin == true;
+    }
+
+    match /Topics/{topicId} {
+      allow read: if canReadContent();
+      allow write: if isAdmin();
+    }
+    
+    match /MarrowTopics/{topicId} {
+      allow read: if canReadContent();
+      allow write: if isAdmin();
+    }
+    
+    match /MasterMCQ/{mcqId} {
+      allow read: if canReadContent();
+      allow write: if isAdmin();
+    }
+    
+    match /MarrowMCQ/{mcqId} {
+      allow read: if canReadContent();
+      allow write: if isAdmin();
+    }
+    
+    match /Flashcards/{flashcardId} {
+      allow read: if canReadContent();
+      allow write: if isAdmin();
+    }
+    
+    match /KeyClinicalTopics/{topicId} {
+      allow read: if canReadContent();
+      allow write: if isAdmin();
+    }
+    
+    // --- Application Data ---
+    // Quiz results can be created by the user they belong to, and only read by that same user.
+    match /quizResults/{resultId} {
+      allow read: if request.auth.uid == resource.data.userId;
+      allow create: if request.auth.uid == request.resource.data.userId;
+    }
+    
+    // Temporary quiz sessions can only be accessed by the user who created them.
+    match /quizSessions/{sessionId} {
+      allow read, write, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+    }
+    
+    // Admin-only upload collection.
+    match /userUploads/{uploadId} {
+      allow read, write: if isAdmin();
     }
   }
 }

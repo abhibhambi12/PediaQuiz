@@ -1,7 +1,7 @@
 {
   "functions": [
     {
-      "source": "functions/dist",
+      "source": "workspaces/functions/dist",
       "codebase": "default",
       "ignore": [
         "node_modules",
@@ -19,7 +19,7 @@
     "rules": "storage.rules"
   },
   "hosting": {
-    "public": "frontend/dist",
+    "public": "workspaces/frontend/dist",
     "ignore": [
       "firebase.json",
       "**/.*",
