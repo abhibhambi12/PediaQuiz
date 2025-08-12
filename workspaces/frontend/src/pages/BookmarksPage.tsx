@@ -13,7 +13,6 @@ import { getMcqsByIds } from '@/services/sessionService'; // Can reuse this
 import { db } from '@/firebase'; // Needed for direct Firestore queries
 import { collection, query, where, getDocs, documentId } from 'firebase/firestore';
 import clsx from 'clsx';
-import { useSound } from '@/hooks/useSound';
 
 // NEW: Helper function to get Flashcards by ID (similar to getMcqsByIds)
 async function getFlashcardsByIds(flashcardIds: string[]): Promise<Flashcard[]> {
@@ -52,7 +51,7 @@ const BookmarksPage: React.FC = () => {
     // REFACTORED: Use useTopics() instead of useData()
     const { data: topics, isLoading: areTopicsLoading, error: topicsError } = useTopics();
     const [expandedTopics, setExpandedTopics] = useState<Set<string>>(new Set());
-    const { playSound } = useSound();
+
 
     const { data: bookmarkIds, isLoading: areBookmarksLoading, error: bookmarksError } = useQuery<string[]>({
         queryKey: ['bookmarks', user?.uid],

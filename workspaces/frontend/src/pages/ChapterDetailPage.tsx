@@ -1,44 +1,42 @@
-// FILE: workspaces/frontend/src/pages/ChapterDetailPage.tsx
+// --- CORRECTED FILE: workspaces/frontend/src/pages/ChapterDetailPage.tsx ---
 
 import React, { useMemo, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { useTopics } from '@/hooks/useTopics'; // NEW: Use topics hook
-import { useChapterContent } from '@/hooks/useChapterContent'; // NEW: Use chapter content hook
+import { HttpsCallableResult } from 'firebase/functions'; // FIX: Correct import path
+import { useTopics } from '@/hooks/useTopics';
+import { useChapterContent } from '@/hooks/useChapterContent';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/Toast';
-import { useSound } from '@/hooks/useSound'; // NEW IMPORT: useSound
 import { getUserUploadDocuments } from '@/services/firestoreService';
 import { generateChapterSummary } from '@/services/aiService';
 import { getAttemptedMCQs } from '@/services/userDataService';
-import { SessionManager } from '@/services/sessionService'; // NEW: SessionManager for persistent sessions
+import { SessionManager } from '@/services/sessionService';
 import Loader from '@/components/Loader';
-import type { Chapter, Topic, UserUpload, MCQ, AttemptedMCQs } from '@pediaquiz/types';
+import type { Chapter, Topic, UserUpload, MCQ, AttemptedMCQs, Attempt } from '@pediaquiz/types'; // FIX: Import Attempt type
 import ReactMarkdown from 'react-markdown';
 import clsx from 'clsx';
 
 const ChapterDetailPage: React.FC = () => {
     const { topicId, chapterId } = useParams<{ topicId: string; chapterId: string }>();
     const { data: topics, isLoading: areTopicsLoading, error: topicsError } = useTopics();
-    const { data: chapterContent, isLoading: isContentLoading } = useChapterContent(chapterId); // Lazily load content
+    const { data: chapterContent, isLoading: isContentLoading, error: chapterContentError } = useChapterContent(chapterId);
     const { user } = useAuth();
     const navigate = useNavigate();
     const { addToast } = useToast();
-    const { playSound } = useSound(); // Use sound hook
 
     const [activeTab, setActiveTab] = useState<'notes' | 'original' | 'summary_preview' | null>(null);
     const [aiSummaryPreview, setAiSummaryPreview] = useState<string | null>(null);
-    const [isCreatingSession, setIsCreatingSession] = useState(false); // For managing session creation loading state
+    const [isCreatingSession, setIsCreatingSession] = useState(false);
 
-    // REFACTORED: Find chapter and topic from the lighter `topics` query
     const { chapter, topic } = useMemo(() => {
         if (!topics) return { chapter: null, topic: null };
         const foundTopic = topics.find((t: Topic) => t.id === topicId);
-        const foundChapter = foundTopic?.chapters.find((ch: Chapter) => ch.id === chapterId);
+        const foundChapter = foundTopic?.chapters.find((ch: Chapter) => ch.id === chapterId); // FIX: Explicitly type ch
         return { chapter: foundChapter || null, topic: foundTopic || null };
     }, [topics, topicId, chapterId]);
 
-    const { data: sourceUploads, isLoading: isLoadingSourceUploads } = useQuery<UserUpload[]>({
+    const { data: sourceUploads, isLoading: isLoadingSourceUploads, error: sourceUploadsError } = useQuery<UserUpload[]>({
         queryKey: ['chapterOriginalUploads', chapterId],
         queryFn: () => getUserUploadDocuments(chapter?.originalTextRefIds || []),
         enabled: !!chapter?.originalTextRefIds && chapter.originalTextRefIds.length > 0,
@@ -49,25 +47,24 @@ const ChapterDetailPage: React.FC = () => {
         return sourceUploads.map(upload => upload.extractedText).filter(Boolean).join('\n\n---\n\n');
     }, [sourceUploads]);
     
-    const { data: attemptedMCQs, isLoading: areAttemptsLoading } = useQuery<AttemptedMCQs>({
+    const { data: attemptedMCQs, isLoading: areAttemptsLoading, error: attemptsError } = useQuery<AttemptedMCQs>({
         queryKey: ['attemptedMCQs', user?.uid],
         queryFn: () => getAttemptedMCQs(user!.uid),
         enabled: !!user,
         initialData: {},
     });
     
-    // REFACTORED: Progress calculation is now more efficient, using `chapterContent`
     const { incorrectMcqIdsInChapter, chapterProgress } = useMemo(() => {
         if (!chapterContent?.mcqs || !attemptedMCQs || !chapter) {
             return { incorrectMcqIdsInChapter: [], chapterProgress: 0 };
         }
         
         const mcqsInChapter = chapterContent.mcqs;
-        const attemptedInChapter = mcqsInChapter.filter(mcq => attemptedMCQs[mcq.id]);
+        const attemptedInChapter = mcqsInChapter.filter((mcq: MCQ) => attemptedMCQs[mcq.id]); // FIX: Explicitly type mcq
         
         const incorrectIds = attemptedInChapter
-            .filter(mcq => !attemptedMCQs[mcq.id].isCorrect)
-            .map(mcq => mcq.id);
+            .filter((mcq: MCQ) => !(attemptedMCQs[mcq.id] as Attempt).isCorrect) // FIX: Explicitly type mcq and access isCorrect safely
+            .map((mcq: MCQ) => mcq.id);
             
         const progress = mcqsInChapter.length > 0 ? (attemptedInChapter.length / mcqsInChapter.length) * 100 : 0;
 
@@ -76,16 +73,14 @@ const ChapterDetailPage: React.FC = () => {
 
     const wrongInChapter = incorrectMcqIdsInChapter.length;
 
-    const generateSummaryMutation = useMutation<any, Error, { uploadIds: string[] }>({
+    const generateSummaryMutation = useMutation<HttpsCallableResult<any>, Error, { uploadIds: string[] }>({
         mutationFn: generateChapterSummary,
         onSuccess: (data) => {
-            playSound('notification');
             setAiSummaryPreview(data.data.summary);
             setActiveTab('summary_preview');
             addToast("AI Summary generated!", 'success');
         },
         onError: (error) => {
-            playSound('incorrect');
             addToast(`Failed to generate AI Summary: ${error.message}`, 'danger');
             setAiSummaryPreview(null);
             setActiveTab('notes');
@@ -95,7 +90,7 @@ const ChapterDetailPage: React.FC = () => {
     React.useEffect(() => {
         if (chapter) {
             if (chapter.summaryNotes) setActiveTab('notes');
-            else if (chapter.originalTextRefIds?.length) setActiveTab('original');
+            else if (chapter.originalTextRefIds && chapter.originalTextRefIds.length > 0) setActiveTab('original'); // FIX: Check originalTextRefIds safely
             else setActiveTab(null);
         }
     }, [chapter]);
@@ -103,7 +98,9 @@ const ChapterDetailPage: React.FC = () => {
     const isLoadingPage = areTopicsLoading || isContentLoading || isLoadingSourceUploads || areAttemptsLoading;
 
     if (isLoadingPage) return <Loader message="Loading chapter details..." />;
-    if (topicsError) return <div className="text-center py-10 text-danger-500">{topicsError.message}</div>;
+    if (topicsError || chapterContentError || sourceUploadsError || attemptsError) { // FIX: Added chapterContentError, sourceUploadsError, attemptsError
+        return <div className="text-center py-10 text-danger-500">{topicsError?.message || chapterContentError?.message || sourceUploadsError?.message || attemptsError?.message}</div>;
+    }
     if (!chapter || !topic) {
         return (
             <div className="text-center py-10">
@@ -114,27 +111,23 @@ const ChapterDetailPage: React.FC = () => {
         );
     }
     
-    // --- DEFINITIVE FIX: ActionButton now creates a persistent session ---
     const ActionButton: React.FC<{ mode: 'practice' | 'quiz' | 'incorrect' | 'flashcards', title: string, subtitle: string, disabled?: boolean, className?: string, mcqIds?: string[] }> = ({ mode, title, subtitle, disabled = false, className = '', mcqIds }) => {
         const handleAction = async () => {
-            playSound('buttonClick');
-            if (disabled || !user || !chapterContent) return; // chapterContent should be loaded by now
+            if (disabled || !user || !chapterContent) return;
 
             setIsCreatingSession(true);
             try {
                 let sessionMcqIds: string[] = [];
                 if (mode === 'practice' || mode === 'quiz') {
-                    sessionMcqIds = chapterContent.mcqs.map(m => m.id);
+                    sessionMcqIds = chapterContent.mcqs.map((m: MCQ) => m.id); // FIX: Explicitly type m
                 } else if (mode === 'incorrect') {
-                    sessionMcqIds = mcqIds || []; // Use provided incorrect IDs
+                    sessionMcqIds = mcqIds || [];
                 } else if (mode === 'flashcards') {
-                    // Flashcards are handled by their own page, this button links directly.
-                    // This `mode` is primarily for routing to `/flashcards`
                     navigate(`/flashcards/${topic.id}/${chapter.id}`);
-                    return; // Exit as navigation is direct
+                    return;
                 }
 
-                if (sessionMcqIds.length === 0 && mode !== 'flashcards') {
+                if (sessionMcqIds.length === 0 && mode !== 'flashcards') { // FIX: Correct mode comparison
                     addToast("No questions available for this session.", "warning");
                     return;
                 }
@@ -168,7 +161,6 @@ const ChapterDetailPage: React.FC = () => {
                     )}
                     onClick={(e) => { 
                         if (disabled) e.preventDefault();
-                        playSound('buttonClick'); // Play sound even if disabled, but not on default prevent
                     }}
                 >
                     {buttonContent}
@@ -189,7 +181,6 @@ const ChapterDetailPage: React.FC = () => {
             </button>
         );
     };
-    // --- END OF FIX ---
 
     const showStudyMaterials = chapter.summaryNotes || (chapter.originalTextRefIds && chapter.originalTextRefIds.length > 0);
 
@@ -224,7 +215,7 @@ const ChapterDetailPage: React.FC = () => {
                         mcqIds={incorrectMcqIdsInChapter}
                     />
                     <ActionButton 
-                        mode="flashcards" // This mode will trigger direct Link navigation in its handler
+                        mode="flashcards"
                         title="Flashcards"
                         subtitle="Review key concepts"
                         className="bg-warning-500 hover:bg-warning-600 text-white"
@@ -233,29 +224,27 @@ const ChapterDetailPage: React.FC = () => {
                 </div>
             </div>
 
-            {/* Universal Study Materials Section */}
-            {(showStudyMaterials || (user?.isAdmin && chapter?.originalTextRefIds && chapter.originalTextRefIds.length > 0)) && ( // Show if materials exist OR if admin and original text exists for summary gen
+            {(showStudyMaterials || (user?.isAdmin && chapter?.originalTextRefIds && chapter.originalTextRefIds.length > 0)) && (
                 <div className="card-base p-6 mt-6 space-y-4 animate-fade-in-up">
                     <div className="flex justify-between items-center pb-3 border-b border-neutral-200 dark:border-neutral-700">
                         <h2 className="text-2xl font-bold">Study Materials</h2>
-                        {user?.isAdmin && ( // Only show admin controls if original text is available
+                        {user?.isAdmin && (
                             <>
-                                {chapter.originalTextRefIds && chapter.originalTextRefIds.length > 0 && !aiSummaryPreview && ( // Only show if original text exists and no preview yet
+                                {chapter.originalTextRefIds && chapter.originalTextRefIds.length > 0 && !aiSummaryPreview && (
                                     <button
-                                        onClick={() => { playSound('buttonClick'); generateSummaryMutation.mutate({ uploadIds: chapter.originalTextRefIds! }); }}
+                                        onClick={() => { generateSummaryMutation.mutate({ uploadIds: chapter.originalTextRefIds! }); }}
                                         disabled={generateSummaryMutation.isPending}
                                         className="btn-neutral text-sm py-1.5 px-3"
                                     >
                                         {generateSummaryMutation.isPending ? 'Generating...' : '🤖 Generate AI Summary'}
                                     </button>
                                 )}
-                                {activeTab === 'notes' && ( // Only show edit button on notes tab
+                                {activeTab === 'notes' && (
                                     <Link 
                                         to={`/admin/marrow/notes/edit/${topicId}/${chapterId}`}
-                                        state={{ source: topic.source }} // Pass the source for universal updates
+                                        state={{ source: topic.source }}
                                         className="p-2 rounded-full text-neutral-400 hover:text-primary-500 transition-colors"
                                         title="Edit Notes"
-                                        onClick={() => playSound('buttonClick')}
                                     >
                                         <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                                     </Link>
@@ -270,8 +259,8 @@ const ChapterDetailPage: React.FC = () => {
                                 "px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-colors",
                                 activeTab === 'notes' ? 'border-primary-500 text-primary-500' : 'border-transparent text-neutral-500 hover:text-primary-500'
                             )}
-                            onClick={() => { playSound('buttonClick'); setActiveTab('notes'); setAiSummaryPreview(null); }} // Clear preview when switching tabs
-                            disabled={!chapter.summaryNotes && !user?.isAdmin} // Disable if no notes and not admin (to add)
+                            onClick={() => { setActiveTab('notes'); setAiSummaryPreview(null); }}
+                            disabled={!chapter.summaryNotes && !user?.isAdmin}
                         >
                             Summary Notes
                         </button>
@@ -280,18 +269,18 @@ const ChapterDetailPage: React.FC = () => {
                                 "px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-colors",
                                 activeTab === 'original' ? 'border-primary-500 text-primary-500' : 'border-transparent text-neutral-500 hover:text-primary-500'
                             )}
-                            onClick={() => { playSound('buttonClick'); setActiveTab('original'); setAiSummaryPreview(null); }}
+                            onClick={() => { setActiveTab('original'); setAiSummaryPreview(null); }}
                             disabled={!(chapter.originalTextRefIds && chapter.originalTextRefIds.length > 0)}
                         >
                             Original Text
                         </button>
-                        {aiSummaryPreview && ( // Show AI Summary Preview tab if available
+                        {aiSummaryPreview && (
                              <button
                                 className={clsx(
                                     "px-4 py-2 -mb-px border-b-2 font-medium text-sm transition-colors",
                                     activeTab === 'summary_preview' ? 'border-primary-500 text-primary-500' : 'border-transparent text-neutral-500 hover:text-primary-500'
                                 )}
-                                onClick={() => { playSound('buttonClick'); setActiveTab('summary_preview'); }}
+                                onClick={() => { setActiveTab('summary_preview'); }}
                             >
                                 AI Summary Preview
                             </button>

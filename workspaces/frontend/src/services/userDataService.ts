@@ -1,5 +1,3 @@
-// FILE: workspaces/frontend/src/services/userDataService.ts
-
 import { httpsCallable, HttpsCallableResult } from 'firebase/functions';
 import { collection, getDocs, doc, getDoc, query, orderBy, QueryDocumentSnapshot } from 'firebase/firestore';
 import { functions, db } from '@/firebase';
@@ -9,8 +7,6 @@ const addQuizResultFn = httpsCallable<Omit<QuizResult, 'id' | 'userId' | 'date'>
 const addAttemptFn = httpsCallable<{ mcqId: string; isCorrect: boolean }, { success: boolean }>(functions, 'addattempt');
 const toggleBookmarkFn = httpsCallable<ToggleBookmarkCallableData, { bookmarked: boolean, bookmarks: string[] }>(functions, 'togglebookmark');
 const deleteContentItemFn = httpsCallable<DeleteContentItemCallableData, { success: boolean, message: string }>(functions, 'deletecontentitem');
-const addFlashcardAttemptFn = httpsCallable<{ flashcardId: string, rating: 'again' | 'good' | 'easy' }, { success: boolean }>(functions, 'addFlashcardAttempt');
-
 
 export const addQuizResult = async (result: Omit<QuizResult, 'id' | 'userId' | 'date'>): Promise<HttpsCallableResult<{ success: boolean, id: string }>> => {
     return await addQuizResultFn(result);
@@ -26,10 +22,6 @@ export const toggleBookmark = async (data: ToggleBookmarkCallableData): Promise<
 
 export const deleteContentItem = async (data: DeleteContentItemCallableData): Promise<HttpsCallableResult<{ success: boolean; message: string }>> => {
     return await deleteContentItemFn(data);
-};
-
-export const addFlashcardAttempt = async (data: { flashcardId: string, rating: 'again' | 'good' | 'easy' }): Promise<HttpsCallableResult<{ success: boolean }>> => {
-    return await addFlashcardAttemptFn(data);
 };
 
 export const getAttemptedMCQs = async (userId: string): Promise<AttemptedMCQs> => {

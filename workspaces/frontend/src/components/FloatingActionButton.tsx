@@ -1,8 +1,8 @@
-// FILE: workspaces/frontend/src/components/FloatingActionButton.tsx
+// --- CORRECTED FILE: workspaces/frontend/src/components/FloatingActionButton.tsx ---
+
 import React from 'react';
 import { Link } from 'react-router-dom';
 import clsx from 'clsx';
-import { useSound } from '@/hooks/useSound';
 
 const AssistantIcon = () => (
     <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -12,12 +12,9 @@ const AssistantIcon = () => (
 );
 
 const FloatingActionButton: React.FC = () => {
-  const { playSound } = useSound();
-  
   return (
     <Link
       to="/chat"
-      onClick={() => playSound('buttonClick')}
       className={clsx(
         "fixed bottom-24 right-4 z-40 h-16 w-16 rounded-full",
         "bg-secondary-500 text-white shadow-lg",

@@ -1,4 +1,5 @@
-// FILE: workspaces/functions/src/utils/validation.ts
+// workspaces/functions/src/utils/validation.ts
+// --- CORRECTED FILE: workspaces/functions/src/utils/validation.ts ---
 
 import { z } from "zod";
 import { HttpsError } from "firebase-functions/v2/https";
@@ -33,9 +34,11 @@ export const FlashcardAttemptSchema = z.object({
   flashcardId: z.string().trim().min(1, "Flashcard ID is required."),
   rating: z.enum(['again', 'good', 'easy']),
 });
+// FIX: Added 'isMarrow' to the schema
 export const ProcessMarrowTextSchema = z.object({
     rawText: z.string().trim().min(10, "Raw text must be at least 10 characters."),
     fileName: z.string().trim().min(1, "File name is required."),
+    isMarrow: z.boolean(), // FIX: Added missing field
 });
 
 // --- Validation Helper ---
@@ -45,7 +48,7 @@ export function validateInput<T>(schema: z.ZodSchema<T>, data: unknown): T {
   } catch (error) {
     if (error instanceof z.ZodError) {
       console.error("Zod validation error:", error.errors);
-      const messages = error.errors.map((err: z.ZodIssue) => `${err.path.join('.')} ${err.message}`).join('; ');
+      const messages = error.errors.map((err: z.ZodIssue) => `${err.path.join('.')}.${err.message}`).join('; ');
       
       throw new HttpsError(
         'invalid-argument', 

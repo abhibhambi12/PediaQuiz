@@ -4,17 +4,16 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
-import { useTopics } from '@/hooks/useTopics'; // REFACTORED: Use specific topic hook
-import { useChapterContent } from '@/hooks/useChapterContent'; // REFACTORED: Use specific chapter content hook
+import { useTopics } from '@/hooks/useTopics';
+import { useChapterContent } from '@/hooks/useChapterContent';
 import { useToast } from '@/components/Toast';
 import { deleteContentItem, toggleBookmark, getBookmarks } from '@/services/userDataService';
-import { addFlashcardAttempt } from '@/services/aiService'; // For flashcard spaced repetition
+import { addFlashcardAttempt } from '@/services/aiService';
 import Loader from '@/components/Loader';
 import { TrashIcon, BookmarkIcon } from '@/components/Icons';
 import ConfirmationModal from '@/components/ConfirmationModal';
-import type { Flashcard, ToggleBookmarkCallableData, DeleteContentItemCallableData, Topic, Chapter } from '@pediaquiz/types';
+import type { Flashcard, ToggleBookmarkCallableData, DeleteContentItemCallableData, Topic, Chapter } from '@pediaquiz/types'; // FIX: PediaquizTopicType is not needed here
 import clsx from 'clsx';
-import { useSound } from '@/hooks/useSound';
 
 type ConfidenceRating = 'again' | 'good' | 'easy';
 
@@ -23,25 +22,23 @@ const FlashcardSessionPage: React.FC = () => {
     const { user } = useAuth();
     const queryClient = useQueryClient();
     const { addToast } = useToast();
-    const { playSound } = useSound();
 
-    // REFACTORED: Fetch topics for chapter name lookup
     const { data: topics, isLoading: areTopicsLoading, error: topicsError } = useTopics();
-    // REFACTORED: Fetch flashcards specifically for this chapter
     const { data: chapterContent, isLoading: isContentLoading, error: contentError } = useChapterContent(chapterId);
 
-    const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
+    const [flashcards, setFlashcards] = useState<Flashcard[]>([]
+        // FIX: Initialize with empty array to prevent issues before data loads
+        // Or set via useEffect only. This is safe.
+    );
     const [currentCardIndex, setCurrentCardIndex] = useState(0);
     const [isFlipped, setIsFlipped] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
-    // Derive topic and chapter name for display
     const { currentTopic, currentChapter } = useMemo(() => {
-        const topic = topics?.find(t => t.id === topicId);
-        const chapter = topic?.chapters.find(c => c.id === chapterId);
+        const topic = topics?.find((t: Topic) => t.id === topicId); // FIX: Explicitly type t
+        const chapter = topic?.chapters.find((c: Chapter) => c.id === chapterId); // FIX: Explicitly type c
         return { currentTopic: topic, currentChapter: chapter };
     }, [topics, topicId, chapterId]);
-
 
     const { data: bookmarks } = useQuery<string[]>({
         queryKey: ['bookmarks', user?.uid],
@@ -61,65 +58,56 @@ const FlashcardSessionPage: React.FC = () => {
     const deleteFlashcardMutation = useMutation<any, Error, DeleteContentItemCallableData>({
         mutationFn: deleteContentItem,
         onSuccess: () => {
-            playSound('notification');
             addToast("Flashcard deleted successfully.", "success");
-            queryClient.invalidateQueries({ queryKey: ['topics'] }); // Invalidate topics for updated counts
-            queryClient.invalidateQueries({ queryKey: ['chapterContent', chapterId] }); // Invalidate chapter's content
+            queryClient.invalidateQueries({ queryKey: ['topics'] });
+            queryClient.invalidateQueries({ queryKey: ['chapterContent', chapterId] });
             
-            // Update local state by removing the deleted card and adjusting index
-            if (flashcards.length > 1) {
-                setFlashcards(prev => prev.filter((fc: Flashcard) => fc.id !== currentCard?.id));
-                setCurrentCardIndex(prev => (prev >= flashcards.length - 1 ? 0 : prev));
-            } else {
-                setFlashcards([]); // No cards left, session is empty
-            }
+            // FIX: Update local state correctly after deletion
+            setFlashcards(prev => {
+                const updatedFlashcards = prev.filter((fc: Flashcard) => fc.id !== currentCard?.id);
+                // Adjust index if the deleted card was the last one, otherwise keep current index
+                if (updatedFlashcards.length > 0 && currentCardIndex >= updatedFlashcards.length) {
+                    setCurrentCardIndex(updatedFlashcards.length - 1);
+                } else if (updatedFlashcards.length === 0) {
+                    setCurrentCardIndex(0); // Reset index if no cards left
+                }
+                return updatedFlashcards;
+            });
+            setIsFlipped(false); // Reset flip state after deletion
         },
-        onError: (error) => {
-            playSound('incorrect');
-            addToast(`Error deleting flashcard: ${error.message}`, "error");
-        },
+        onError: (error) => addToast(`Error deleting flashcard: ${error.message}`, "error"),
     });
 
     const toggleBookmarkMutation = useMutation<any, Error, ToggleBookmarkCallableData>({
         mutationFn: toggleBookmark,
-        onSuccess: () => {
-            playSound('buttonClick'); // Play a click sound even for bookmark toggle
-            queryClient.invalidateQueries({ queryKey: ['bookmarks', user?.uid] });
-        },
-        onError: (error) => {
-            playSound('incorrect');
-            addToast(`Error toggling bookmark: ${error.message}`, "error");
-        },
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['bookmarks', user?.uid] }),
+        onError: (error) => addToast(`Error toggling bookmark: ${error.message}`, "error"),
     });
 
     useEffect(() => {
-        // REFACTORED: Populate flashcards from useChapterContent data
         if (chapterContent?.flashcards && topicId && chapterId) {
-            const filteredFlashcards = chapterContent.flashcards.filter((fc: Flashcard) => // filter again just in case, though useChapterContent should be specific
+            const filteredFlashcards = chapterContent.flashcards.filter((fc: Flashcard) =>
                 fc.topicId === topicId && (chapterId === 'all' || fc.chapterId === chapterId)
             );
             setFlashcards(filteredFlashcards.sort(() => Math.random() - 0.5));
             setCurrentCardIndex(0);
             setIsFlipped(false);
         }
-    }, [chapterContent, topicId, chapterId]); // DEPENDS ON chapterContent
-
+    }, [chapterContent, topicId, chapterId]);
+    
     const currentCard = useMemo(() => flashcards[currentCardIndex], [flashcards, currentCardIndex]);
     const isBookmarked = useMemo(() => !!(bookmarks && currentCard && bookmarks.includes(currentCard.id)), [bookmarks, currentCard]);
 
     const handleFlip = () => {
-        playSound('flip'); // Assuming you have a 'flip' sound configured
         setIsFlipped(f => !f);
     };
 
     const handleConfidenceRating = (rating: ConfidenceRating) => {
         if (!currentCard) return;
-        playSound('buttonClick'); 
         
         addFlashcardAttemptMutation.mutate({ flashcardId: currentCard.id, rating });
 
-        setIsFlipped(false); // Flip back to question side
-        // Advance to next card after a short delay for animation
+        setIsFlipped(false);
         setTimeout(() => {
             setCurrentCardIndex(prev => (prev + 1) % flashcards.length);
         }, 150);
@@ -127,7 +115,6 @@ const FlashcardSessionPage: React.FC = () => {
 
     const handleDeleteFlashcard = () => {
         if (!user?.isAdmin || !currentCard) return;
-        // Determine collection name based on source. Default to 'Flashcards' if not explicitly defined.
         const collectionName: 'Flashcards' = 'Flashcards'; 
         deleteFlashcardMutation.mutate({ id: currentCard.id, type: 'flashcard', collectionName });
         setIsDeleteModalOpen(false);
@@ -138,7 +125,6 @@ const FlashcardSessionPage: React.FC = () => {
         toggleBookmarkMutation.mutate({ contentId: currentCard.id, contentType: 'flashcard' });
     };
 
-    // Combined loading state for all necessary data
     if (areTopicsLoading || isContentLoading || deleteFlashcardMutation.isPending || toggleBookmarkMutation.isPending || addFlashcardAttemptMutation.isPending) {
         return <Loader message="Loading flashcards..." />;
     }
@@ -170,7 +156,7 @@ const FlashcardSessionPage: React.FC = () => {
                     <div className="flex items-center space-x-2">
                         {user?.isAdmin && (
                             <button
-                                onClick={() => { playSound('buttonClick'); setIsDeleteModalOpen(true); }}
+                                onClick={() => setIsDeleteModalOpen(true)}
                                 className="p-2 rounded-full text-slate-400 hover:text-red-500"
                                 title="Delete Flashcard"
                             >

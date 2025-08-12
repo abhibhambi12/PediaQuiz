@@ -14,10 +14,10 @@ module.exports = {
   ],
   parser: "@typescript-eslint/parser",
   parserOptions: {
-    // THE FIX: Point to the tsconfig.json in the CURRENT directory
+    // Point to the tsconfig.json in the CURRENT directory
     project: ["tsconfig.json"],
     sourceType: "module",
-    // Add this line to specify the tsconfig's root directory
+    // Specify the tsconfig's root directory
     tsconfigRootDir: __dirname,
   },
   ignorePatterns: [

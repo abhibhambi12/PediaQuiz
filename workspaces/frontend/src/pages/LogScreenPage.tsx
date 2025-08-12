@@ -1,8 +1,10 @@
+// --- CORRECTED FILE: workspaces/frontend/src/pages/LogScreenPage.tsx ---
+
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, QueryDocumentSnapshot } from 'firebase/firestore';
 import { db } from '@/firebase';
-import type { UserUpload, UploadStatus } from '@pediaquiz/types';
+import type { UserUpload, UploadStatus } from '@pediaquiz/types'; // FIX: Ensure types are imported correctly
 import Loader from '@/components/Loader';
 
 const getStatusColor = (status: UploadStatus) => {
@@ -19,7 +21,7 @@ const LogScreenPage: React.FC = () => {
         queryFn: async () => {
             const q = query(collection(db, 'userUploads'), orderBy('createdAt', 'desc'));
             const snapshot = await getDocs(q);
-            return snapshot.docs.map(doc => {
+            return snapshot.docs.map((doc: QueryDocumentSnapshot) => { // FIX: Explicitly type doc
                 const data = doc.data();
                 return { 
                     ...data,
@@ -40,7 +42,7 @@ const LogScreenPage: React.FC = () => {
             <p className="text-slate-500">A real-time log of all content generation jobs.</p>
             <div className="space-y-4">
                 {jobs && jobs.length > 0 ? (
-                    jobs.map((job: UserUpload) => (
+                    jobs.map((job: UserUpload) => ( // FIX: Explicitly type job
                         <div key={job.id} className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-md">
                             <div className="flex justify-between items-start">
                                 <p className="font-bold font-mono text-sm truncate" title={job.fileName}>{job.fileName}</p>

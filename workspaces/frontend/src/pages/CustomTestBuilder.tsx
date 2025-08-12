@@ -3,29 +3,26 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { useTopics } from '@/hooks/useTopics'; // REFACTORED: Use the new granular hook
+import { useTopics } from '@/hooks/useTopics';
 import { getChapterContent } from '@/services/firestoreService';
 import { SessionManager } from '@/services/sessionService';
 import { ChevronDownIcon } from '@/components/Icons';
 import Loader from '@/components/Loader';
 import { useToast } from '@/components/Toast';
-import type { Chapter, Topic, MCQ } from '@pediaquiz/types';
+import type { Chapter, Topic, MCQ } from '@pediaquiz/types'; // FIX: Ensure types are imported correctly
 import clsx from 'clsx';
-import { useSound } from '@/hooks/useSound';
 
 const CustomTestBuilder: React.FC = () => {
     const { user } = useAuth();
-    const { data: topics, isLoading, error } = useTopics(); // REFACTORED: Use the new granular hook
+    const { data: topics, isLoading, error } = useTopics();
     const navigate = useNavigate();
     const { addToast } = useToast();
-    const { playSound } = useSound();
     const [isCreatingTest, setIsCreatingTest] = useState(false);
 
     const [selectedChapters, setSelectedChapters] = useState<Set<string>>(new Set());
     const [totalQuestions, setTotalQuestions] = useState<number>(20);
     const [expandedTopics, setExpandedTopics] = useState<Set<string>>(new Set());
 
-    // REFACTORED: Calculate count from topics data instead of loading all MCQs
     const selectedMcqCount = useMemo(() => {
         if (!topics) return 0;
         let count = 0;
@@ -40,7 +37,6 @@ const CustomTestBuilder: React.FC = () => {
     }, [selectedChapters, topics]);
 
     const handleChapterToggle = (chapterId: string) => {
-        playSound('buttonClick');
         setSelectedChapters(prev => {
             const newSet = new Set(prev);
             newSet.has(chapterId) ? newSet.delete(chapterId) : newSet.add(chapterId);
@@ -49,18 +45,21 @@ const CustomTestBuilder: React.FC = () => {
     };
 
     const handleTopicToggle = (chaptersInTopic: Chapter[]) => {
-        playSound('buttonClick');
-        const chapterIds = chaptersInTopic.map((c: Chapter) => c.id);
+        const chapterIds = chaptersInTopic.map((c: Chapter) => c.id); // FIX: Explicitly type c
         const allSelected = chaptersInTopic.length > 0 && chapterIds.every(id => selectedChapters.has(id));
+        
         setSelectedChapters(prev => {
             const newSet = new Set(prev);
-            chapterIds.forEach(id => allSelected ? newSet.delete(id) : newSet.add(id));
+            if (allSelected) {
+                chapterIds.forEach(id => newSet.delete(id));
+            } else {
+                chapterIds.forEach(id => newSet.add(id));
+            }
             return newSet;
         });
     };
 
     const toggleTopicExpand = (topicId: string) => {
-        playSound('buttonClick');
         setExpandedTopics(prev => {
             const newSet = new Set(prev);
             newSet.has(topicId) ? newSet.delete(topicId) : newSet.add(topicId);
@@ -68,9 +67,7 @@ const CustomTestBuilder: React.FC = () => {
         });
     };
 
-    // REFACTORED: Use SessionManager to create a persistent test session
     const handleStartTest = async () => {
-        playSound('notification');
         setIsCreatingTest(true);
         const chapterIds = Array.from(selectedChapters);
         if (chapterIds.length === 0 || !user) {
@@ -90,13 +87,15 @@ const CustomTestBuilder: React.FC = () => {
             const testMcqIds = allAvailableMcqs
                 .sort(() => 0.5 - Math.random())
                 .slice(0, totalQuestions)
-                .map(mcq => mcq.id);
+                .map((mcq: MCQ) => mcq.id); // FIX: Explicitly type mcq
 
             const sessionId = await SessionManager.createSession(user.uid, 'custom', testMcqIds);
             navigate(`/session/custom/${sessionId}`);
 
         } catch (err) {
             addToast("Failed to create the test. Please try again.", "error");
+            console.error(err);
+        } finally {
             setIsCreatingTest(false);
         }
     };
@@ -109,12 +108,17 @@ const CustomTestBuilder: React.FC = () => {
     return (
         <div className="space-y-6">
             <h1 className="text-3xl font-bold">Custom Test Builder</h1>
+
             <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md">
                 <h2 className="text-xl font-bold mb-4">1. Configure Test</h2>
                 <div className="mb-4">
-                    <label htmlFor="numQuestions" className="block text-sm font-medium mb-1">Number of Questions (Available: {selectedMcqCount})</label>
+                    <label htmlFor="numQuestions" className="block text-sm font-medium mb-1">
+                        Number of Questions (Available: {selectedMcqCount})
+                    </label>
                     <input
-                        type="number" id="numQuestions" min={1}
+                        type="number"
+                        id="numQuestions"
+                        min={1}
                         max={selectedMcqCount > 0 ? selectedMcqCount : 1}
                         value={totalQuestions}
                         onChange={(e) => setTotalQuestions(Math.max(1, Math.min(selectedMcqCount, parseInt(e.target.value, 10) || 1)))}
@@ -122,14 +126,19 @@ const CustomTestBuilder: React.FC = () => {
                         disabled={selectedMcqCount === 0}
                     />
                 </div>
-                <button onClick={handleStartTest} disabled={isStartButtonDisabled} className="btn-success w-full py-3 text-lg">
+                <button
+                    onClick={handleStartTest}
+                    disabled={isStartButtonDisabled}
+                    className="btn-success w-full py-3 text-lg"
+                >
                     {isCreatingTest ? 'Building Test...' : 'Start Custom Test'}
                 </button>
             </div>
+
             <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md">
                 <h2 className="text-xl font-bold mb-4">2. Select Content</h2>
                 <div className="space-y-3">
-                    {topics?.map((topic: Topic) => {
+                    {topics?.map((topic: Topic) => { // FIX: Ensure topics is not undefined
                         const isTopicExpanded = expandedTopics.has(topic.id);
                         const chaptersInTopic = topic.chapters;
                         const allInTopicSelected = chaptersInTopic.length > 0 && chaptersInTopic.every((c: Chapter) => selectedChapters.has(c.id));
@@ -140,10 +149,19 @@ const CustomTestBuilder: React.FC = () => {
                             <div key={topic.id} className="border border-slate-200 dark:border-slate-700 rounded-lg">
                                 <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700/50">
                                     <div className="flex items-center gap-3">
-                                        <input type="checkbox" id={`topic-${topic.id}`} checked={allInTopicSelected} ref={el => el && (el.indeterminate = isIndeterminate)} onChange={() => handleTopicToggle(chaptersInTopic)} className="h-5 w-5 rounded text-sky-600 focus:ring-sky-500 border-slate-300"/>
+                                        <input
+                                            type="checkbox"
+                                            id={`topic-${topic.id}`}
+                                            checked={allInTopicSelected}
+                                            ref={el => el && (el.indeterminate = isIndeterminate)}
+                                            onChange={() => handleTopicToggle(chaptersInTopic)}
+                                            className="h-5 w-5 rounded text-sky-600 focus:ring-sky-500 border-slate-300"
+                                        />
                                         <label htmlFor={`topic-${topic.id}`} className="font-medium cursor-pointer select-none">{topic.name}</label>
                                     </div>
-                                    <button onClick={() => toggleTopicExpand(topic.id)} className="p-1"><ChevronDownIcon className={clsx(`transition-transform duration-200`, isTopicExpanded ? 'rotate-180' : '')} /></button>
+                                    <button onClick={() => toggleTopicExpand(topic.id)} className="p-1">
+                                        <ChevronDownIcon className={clsx(`transition-transform duration-200`, isTopicExpanded ? 'rotate-180' : '')} />
+                                    </button>
                                 </div>
                                 {isTopicExpanded && (
                                     <div className="p-4 border-t border-slate-200 dark:border-slate-700">
@@ -151,7 +169,12 @@ const CustomTestBuilder: React.FC = () => {
                                             {chaptersInTopic.map((chapter: Chapter) => (
                                                 <li key={chapter.id}>
                                                     <label className="flex items-center gap-3 cursor-pointer p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700">
-                                                        <input type="checkbox" checked={selectedChapters.has(chapter.id)} onChange={() => handleChapterToggle(chapter.id)} className="h-5 w-5 rounded text-sky-600 focus:ring-sky-500 border-slate-300"/>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedChapters.has(chapter.id)}
+                                                            onChange={() => handleChapterToggle(chapter.id)}
+                                                            className="h-5 w-5 rounded text-sky-600 focus:ring-sky-500 border-slate-300"
+                                                        />
                                                         <span>{chapter.name} ({chapter.mcqCount} MCQs)</span>
                                                     </label>
                                                 </li>

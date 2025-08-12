@@ -2,12 +2,12 @@
 
 import React, { useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query'; // Import useQuery
+import { useQuery } from '@tanstack/react-query';
 import Loader from '@/components/Loader';
 import SearchResultItem from '@/components/SearchResultItem';
-import { MCQ } from '@pediaquiz/types';
-import { db } from '@/firebase'; // Import db for direct Firestore queries
-import { collection, query, where, getDocs } from 'firebase/firestore'; // Import necessary Firestore functions
+import { MCQ } from '@pediaquiz/types'; // FIX: Ensure types are imported correctly
+import { db } from '@/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
 // Helper function to fetch MCQs by tag
 async function getMcqsByTag(tag: string): Promise<MCQ[]> {
@@ -16,15 +16,14 @@ async function getMcqsByTag(tag: string): Promise<MCQ[]> {
     const mcqs: MCQ[] = [];
     const lowerCaseTag = tag.toLowerCase();
 
-    // Query both MasterMCQ and MarrowMCQ collections
     const masterQuery = query(
         collection(db, 'MasterMCQ'),
-        where('tags', 'array-contains', lowerCaseTag), // Assuming tags are stored lowercase
+        where('tags', 'array-contains', lowerCaseTag),
         where('status', '==', 'approved')
     );
     const marrowQuery = query(
         collection(db, 'MarrowMCQ'),
-        where('tags', 'array-contains', lowerCaseTag), // Assuming tags are stored lowercase
+        where('tags', 'array-contains', lowerCaseTag),
         where('status', '==', 'approved')
     );
 
@@ -39,25 +38,21 @@ async function getMcqsByTag(tag: string): Promise<MCQ[]> {
     return mcqs;
 }
 
-
 const TagQuestionsPage: React.FC = () => {
     const { tagName } = useParams<{ tagName: string }>();
 
     const decodedTagName = useMemo(() => {
         if (tagName) {
-            // Normalize the tag name to match how it's stored (lowercase, spaces to underscores)
-            // Then decode for display
             return decodeURIComponent(tagName).replace(/_/g, ' ');
         }
         return '';
     }, [tagName]);
 
-    // REFACTORED: Use specific query for MCQs by tag
     const { data: filteredMcqs, isLoading, error } = useQuery<MCQ[]>({
         queryKey: ['tagQuestions', decodedTagName],
         queryFn: () => getMcqsByTag(decodedTagName),
-        enabled: !!decodedTagName, // Only run the query if tagName is available
-        staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+        enabled: !!decodedTagName,
+        staleTime: 1000 * 60 * 5,
     });
 
     if (isLoading) return <Loader message={`Loading questions for "${decodedTagName}"...`} />;
@@ -80,7 +75,7 @@ const TagQuestionsPage: React.FC = () => {
                 </div>
             ) : (
                 <div className="space-y-4">
-                    {filteredMcqs?.map((item: MCQ) => (
+                    {filteredMcqs?.map((item: MCQ) => ( // FIX: Explicitly type item
                         <SearchResultItem key={item.id} item={item} />
                     ))}
                 </div>

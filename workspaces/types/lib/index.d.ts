@@ -1,4 +1,3 @@
-// --- USER & AUTH ---
 export interface User {
     uid: string;
     email: string | null;
@@ -7,11 +6,9 @@ export interface User {
     createdAt: Date;
     lastLogin: Date;
     bookmarks?: string[];
-    currentStreak?: number; // Added in new version
-    lastStudiedDate?: Date; // Added in new version
+    currentStreak?: number;
+    lastStudiedDate?: Date;
 }
-
-// --- CONTENT STRUCTURE ---
 export interface Chapter {
     id: string;
     name: string;
@@ -24,7 +21,6 @@ export interface Chapter {
     source?: 'General' | 'Marrow';
     topicName?: string;
 }
-
 export interface Topic {
     id: string;
     name: string;
@@ -35,11 +31,7 @@ export interface Topic {
     source?: 'General' | 'Marrow';
 }
 export type PediaquizTopicType = Topic;
-
-
-// --- STUDY MATERIALS ---
 export type ContentStatus = 'pending' | 'approved' | 'rejected';
-
 export interface MCQ {
     id: string;
     question: string;
@@ -57,7 +49,6 @@ export interface MCQ {
     uploadId?: string;
     tags?: string[];
 }
-
 export interface Flashcard {
     id: string;
     front: string;
@@ -74,7 +65,6 @@ export interface Flashcard {
     topicName?: string;
     chapterName?: string;
 }
-
 export interface LabValue {
     id: string;
     parameter: string;
@@ -83,19 +73,21 @@ export interface LabValue {
     unit: string;
     source?: string;
 }
-
-// --- STATS & PROGRESS ---
 export interface QuizResult {
     id: string;
     userId: string;
-    results: Array<{ mcqId: string; isCorrect: boolean; selectedAnswer: string | null; correctAnswer: string; }>;
+    results: Array<{
+        mcqId: string;
+        isCorrect: boolean;
+        selectedAnswer: string | null;
+        correctAnswer: string;
+    }>;
     score: number;
     totalQuestions: number;
     date: Date;
     source: string;
     chapterId?: string;
 }
-
 export interface Attempt {
     attempts: number;
     correct: number;
@@ -104,26 +96,16 @@ export interface Attempt {
     lastAttempted: Date;
     interval?: number;
     easeFactor?: number;
-    nextReviewDate?: any; // Changed from Date in old to any in new
+    nextReviewDate?: any;
 }
-export interface AttemptedMCQs { [mcqId: string]: Attempt; }
-
+export interface AttemptedMCQs {
+    [mcqId: string]: Attempt;
+}
 export interface AwaitingReviewData {
     mcqs: MCQ[];
     flashcards: Flashcard[];
 }
-
-// --- AI & ADMIN ---
-export type UploadStatus =
-    | 'pending_upload' | 'pending_ocr' | 'failed_ocr' | 'processed'
-    | 'pending_classification' | 'pending_approval' | 'batch_ready'
-    | 'generating_batch' | 'pending_final_review'
-    | 'pending_marrow_generation_approval'
-    | 'pending_generation_decision' | 'pending_assignment'
-    | 'pending_assignment_review' | 'completed' | 'error'
-    | 'failed_unsupported_type' | 'archived' | 'failed_ai_extraction'
-    | 'failed_api_permission';
-
+export type UploadStatus = 'pending_upload' | 'pending_ocr' | 'failed_ocr' | 'processed' | 'pending_classification' | 'pending_approval' | 'batch_ready' | 'generating_batch' | 'pending_final_review' | 'pending_marrow_generation_approval' | 'pending_generation_decision' | 'pending_assignment' | 'pending_assignment_review' | 'completed' | 'error' | 'failed_unsupported_type' | 'archived' | 'failed_ai_extraction' | 'failed_api_permission';
 export interface UserUpload {
     id: string;
     userId: string;
@@ -153,16 +135,23 @@ export interface UserUpload {
     totalBatches?: number;
     completedBatches?: number;
     textChunks?: string[];
-    generatedContent?: Array<{ batchNumber: number; mcqs: Partial<MCQ>[]; flashcards: Partial<Flashcard>[]; }>;
+    generatedContent?: Array<{
+        batchNumber: number;
+        mcqs: Partial<MCQ>[];
+        flashcards: Partial<Flashcard>[];
+    }>;
     finalAwaitingReviewData?: AwaitingReviewData;
     approvedTopic?: string;
     approvedChapter?: string;
     assignmentSuggestions?: AssignmentSuggestion[];
     existingQuestionSnippets?: string[];
 }
-
-export interface ChatMessage { id: string; text: string; sender: 'user' | 'assistant'; timestamp: Date; }
-
+export interface ChatMessage {
+    id: string;
+    text: string;
+    sender: 'user' | 'assistant';
+    timestamp: Date;
+}
 export interface AssignmentSuggestion {
     topicName: string;
     chapterName: string;
@@ -170,23 +159,19 @@ export interface AssignmentSuggestion {
     mcqs?: MCQ[];
     flashcards?: Flashcard[];
 }
-
 export type ToggleBookmarkCallableData = {
     contentId: string;
     contentType: 'mcq' | 'flashcard';
 };
-
 export type DeleteContentItemCallableData = {
     id: string;
     type: 'mcq' | 'flashcard';
     collectionName: 'MasterMCQ' | 'MarrowMCQ' | 'Flashcards';
 };
-
-// --- UTILITY ---
-export type AppData = { 
-    topics: Topic[]; 
-    mcqs: MCQ[]; 
-    flashcards: Flashcard[]; 
+export type AppData = {
+    topics: Topic[];
+    mcqs: MCQ[];
+    flashcards: Flashcard[];
     labValues: LabValue[];
     keyClinicalTopics: string[];
 };

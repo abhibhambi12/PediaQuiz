@@ -1,25 +1,35 @@
-// --- CORRECTED FILE: workspaces/frontend/src/contexts/DataContext.tsx ---
-
+// workspaces/frontend/src/contexts/DataContext.tsx
 import { createContext, useContext, ReactNode } from 'react';
-import { UseQueryResult } from '@tanstack/react-query';
-import { AppData } from '@pediaquiz/types';
+import { useQuery, UseQueryResult } from '@tanstack/react-query';
+import { getAppData } from '@/services/firestoreService';
+import type { AppData } from '@pediaquiz/types';
 
-// This context is effectively deprecated. Components should now use specific data hooks.
-// This context will provide 'undefined' to any consumers.
-const DataContext = createContext<UseQueryResult<AppData, Error> | undefined>(undefined);
+// The context will provide the result of the TanStack Query
+type DataContextType = UseQueryResult<AppData, Error>;
+
+const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider = ({ children }: { children: ReactNode }) => {
-    // The query and data fetching logic have been removed from here.
-    // Passing 'undefined' to the provider ensures components cannot rely on it.
+    // Use TanStack Query to fetch, cache, and manage the app data.
+    const appDataQuery = useQuery<AppData, Error>({
+        queryKey: ['appData'],
+        queryFn: getAppData,
+        staleTime: 1000 * 60 * 60, // 1 hour
+        gcTime: 1000 * 60 * 60 * 24, // garbage collection time for v5
+        refetchOnWindowFocus: true, 
+    });
+
     return (
-        <DataContext.Provider value={undefined}>
+        <DataContext.Provider value={appDataQuery}>
             {children}
         </DataContext.Provider>
     );
 };
 
-export const useData = (): UseQueryResult<AppData, Error> | undefined => {
-    // This hook will now always return 'undefined'.
-    // Components calling it will need to be refactored to use granular data fetching hooks.
-    return useContext(DataContext);
+export const useData = (): DataContextType => {
+    const context = useContext(DataContext);
+    if (context === undefined) {
+        throw new Error('useData must be used within a DataProvider');
+    }
+    return context;
 };

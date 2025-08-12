@@ -9,7 +9,7 @@ import {
   Outlet,
 } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
-import { DataProvider } from "./contexts/DataContext"; // Keep DataProvider for now, even if it does nothing
+import { DataProvider } from "./contexts/DataContext";
 import { ToastProvider } from "./components/Toast";
 import Header from "./components/Header";
 import BottomNav from "./components/BottomNav";
@@ -17,7 +17,6 @@ import AdminRoute from "./components/AdminRoute";
 import Loader from "./components/Loader";
 import FloatingActionButton from "./components/FloatingActionButton";
 import ErrorBoundary from "./components/ErrorBoundary";
-import { SoundProvider } from "./hooks/useSound";
 
 // Import Pages
 import HomePage from "./pages/HomePage";
@@ -40,7 +39,7 @@ import SearchResultsPage from "./pages/SearchResultsPage";
 import TagsPage from "./pages/TagsPage";
 import TagQuestionsPage from "./pages/TagQuestionsPage";
 import ChapterNotesEditPage from "./pages/ChapterNotesEditPage";
-import QuizResultsPage from "./components/QuizResultsPage"; // Correct import path for QuizResultsPage
+import QuizResultsPage from "./components/QuizResultsPage"; // Import QuizResultsPage as default
 
 const AppLayout: React.FC = () => (
   <div className="flex flex-col min-h-screen bg-neutral-100 dark:bg-neutral-900">
@@ -82,9 +81,10 @@ const AppContent: React.FC = () => {
         <Route path="/stats" element={<StatsPage />} />
         <Route path="/log-screen" element={<LogScreenPage />} />
         <Route path="/bookmarks" element={<BookmarksPage />} />
-        {/* MCQ Session routes */}
+        
         <Route path="/session/:mode/:sessionId" element={<MCQSessionPage />} />
         <Route path="/session/:mode/:sessionId/results" element={<QuizResultsPage />} />
+
         <Route path="/search" element={<SearchResultsPage />} />
         
         <Route path="/tags" element={<TagsPage />} />
@@ -92,47 +92,26 @@ const AppContent: React.FC = () => {
 
         <Route
           path="/admin/marrow/notes/edit/:topicId/:chapterId"
-          element={
-            <AdminRoute>
-              <ChapterNotesEditPage />
-            </AdminRoute>
-          }
+          element={<AdminRoute><ChapterNotesEditPage /></AdminRoute>}
         />
         <Route
           path="/generator"
-          element={
-            <AdminRoute>
-              <GeneratorPage />
-            </AdminRoute>
-          }
+          element={<AdminRoute><GeneratorPage /></AdminRoute>}
         />
         <Route
           path="/admin/review"
-          element={
-            <AdminRoute>
-              <AdminReviewPage />
-            </AdminRoute>
-          }
+          element={<AdminRoute><AdminReviewPage /></AdminRoute>}
         />
         <Route
           path="/admin/marrow"
-          element={
-            <AdminRoute>
-              <AdminMarrowPage />
-            </AdminRoute>
-          }
+          element={<AdminRoute><AdminMarrowPage /></AdminRoute>}
         />
         <Route
           path="/admin/completed"
-          element={
-            <AdminRoute>
-              <AdminCompletedJobsPage />
-            </AdminRoute>
-          }
+          element={<AdminRoute><AdminCompletedJobsPage /></AdminRoute>}
         />
       </Route>
 
-      {/* Catch-all route */}
       <Route path="*" element={<Navigate to={user ? "/" : "/auth"} replace />} />
     </Routes>
   );
@@ -142,12 +121,9 @@ const App: React.FC = () => (
   <ErrorBoundary>
     <ToastProvider>
       <AuthProvider>
-        {/* DataProvider is kept for structural consistency, even if it provides no data currently */}
-        <DataProvider> 
+        <DataProvider>
           <Router>
-            <SoundProvider>
-              <AppContent />
-            </SoundProvider>
+            <AppContent />
           </Router>
         </DataProvider>
       </AuthProvider>

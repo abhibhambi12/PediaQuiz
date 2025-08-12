@@ -1,127 +1,131 @@
-// --- CORRECTED FILE: workspaces/frontend/src/services/firestoreService.ts ---
-
+// workspaces/frontend/src/services/firestoreService.ts
 import { collection, getDocs, query, where, Timestamp, QueryDocumentSnapshot, documentId } from "firebase/firestore";
 import { db } from "@/firebase";
-import type { Topic, Chapter, MCQ, Flashcard, UserUpload } from "@pediaquiz/types";
+import type { AppData, Topic, Chapter, MCQ, Flashcard, LabValue, UserUpload } from "@pediaquiz/types";
 
-/**
- * Fetches all topics and their chapters, including calculated MCQ/Flashcard counts.
- * This is the new, efficient way to get the main structure of the app content.
- */
-export async function getTopicsAndChapters(): Promise<Topic[]> {
+// Helper to normalize topic/chapter IDs - needed for local filtering
+const normalizeId = (name: string): string => {
+  if (typeof name !== 'string') return 'unknown';
+  return name.replace(/\s+/g, '_').toLowerCase();
+};
+
+export async function getAppData(): Promise<AppData> {
   try {
     const [
       generalTopicSnapshot,
       marrowTopicSnapshot,
       masterMcqSnapshot,
       marrowMcqSnapshot,
-      flashcardSnapshot
+      flashcardSnapshot,
+      keyClinicalTopicsSnapshot,
     ] = await Promise.all([
       getDocs(collection(db, "Topics")),
       getDocs(collection(db, "MarrowTopics")),
-      getDocs(query(collection(db, "MasterMCQ"), where("status", "==", "approved"))),
-      getDocs(query(collection(db, "MarrowMCQ"), where("status", "==", "approved"))),
-      getDocs(query(collection(db, "Flashcards"), where("status", "==", "approved")))
+      getDocs(collection(db, "MasterMCQ")),
+      getDocs(collection(db, "MarrowMCQ")),
+      getDocs(collection(db, "Flashcards")),
+      getDocs(collection(db, "KeyClinicalTopics")),
     ]);
 
-    const mcqCounts = new Map<string, number>();
-    const flashcardCounts = new Map<string, number>();
+    const allMcqs: MCQ[] = [];
+    masterMcqSnapshot.docs.forEach((doc: QueryDocumentSnapshot) => {
+        const data = doc.data();
+        allMcqs.push({ ...data, id: doc.id, source: 'Master', topicId: normalizeId(data.topic), chapterId: normalizeId(data.chapter), createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date() } as MCQ);
+    });
+    marrowMcqSnapshot.docs.forEach((doc: QueryDocumentSnapshot) => {
+        const data = doc.data();
+        allMcqs.push({ ...data, id: doc.id, source: 'Marrow', topicId: normalizeId(data.topicId || data.topic), chapterId: normalizeId(data.chapterId || data.chapter), createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date() } as MCQ);
+    });
 
-    const processCounts = (snapshot: any, countsMap: Map<string, number>, type: 'mcq' | 'flashcard') => {
-        snapshot.docs.forEach((doc: QueryDocumentSnapshot) => {
-            const data = doc.data();
-            const topicId = data.topicId;
-            const chapterId = data.chapterId;
-            if(topicId && chapterId) {
-                const key = `${topicId}_${chapterId}`;
-                countsMap.set(key, (countsMap.get(key) || 0) + 1);
-            }
-        });
-    };
+    const allFlashcards: Flashcard[] = flashcardSnapshot.docs.map((doc: QueryDocumentSnapshot) => {
+        const data = doc.data();
+        return { ...data, id: doc.id, topicId: normalizeId(data.topic), chapterId: normalizeId(data.chapter), topicName: data.topic, chapterName: data.chapter, createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date() } as Flashcard;
+    });
     
-    processCounts(masterMcqSnapshot, mcqCounts, 'mcq');
-    processCounts(marrowMcqSnapshot, mcqCounts, 'mcq');
-    processCounts(flashcardSnapshot, flashcardCounts, 'flashcard');
-    
+    const labValues: LabValue[] = [];
+    const mcqCounts = new Map<string, number>();
+    allMcqs.forEach(mcq => {
+        const key = `${mcq.topicId}_${mcq.chapterId}`;
+        mcqCounts.set(key, (mcqCounts.get(key) || 0) + 1);
+    });
+
+    const flashcardCounts = new Map<string, number>();
+    allFlashcards.forEach(fc => {
+        const key = `${fc.topicId}_${fc.chapterId}`;
+        flashcardCounts.set(key, (flashcardCounts.get(key) || 0) + 1);
+    });
+
     const topicsMap = new Map<string, Topic>();
 
-    const processTopics = (snapshot: any, source: 'General' | 'Marrow') => {
-        snapshot.docs.forEach((doc: QueryDocumentSnapshot) => {
-            const data = doc.data();
-            const topicId = doc.id;
-            
-            const chapters: Chapter[] = (data.chapters || []).map((chapterData: any): Chapter => {
-                const chapterName = chapterData.name;
-                const chapterId = chapterData.id;
-                const countKey = `${topicId}_${chapterId}`;
-                return { 
-                    id: chapterId, 
-                    name: chapterName, 
-                    mcqCount: mcqCounts.get(countKey) || 0, 
-                    flashcardCount: flashcardCounts.get(countKey) || 0, 
-                    topicId: topicId,
-                    source: source,
-                    summaryNotes: chapterData.summaryNotes || null,
-                    originalTextRefIds: chapterData.originalTextRefIds || []
-                };
-            }).sort((a: Chapter, b: Chapter) => a.name.localeCompare(b.name));
-
-            const totalMcqCount = chapters.reduce((sum, ch) => sum + ch.mcqCount, 0);
-            const totalFlashcardCount = chapters.reduce((sum, ch) => sum + ch.flashcardCount, 0);
-            
-            topicsMap.set(topicId, {
-                id: topicId,
-                name: data.name,
-                chapters,
-                chapterCount: chapters.length,
-                totalMcqCount,
-                totalFlashcardCount,
-                source
-            });
+    // Process General Topics
+    generalTopicSnapshot.docs.forEach((doc: QueryDocumentSnapshot) => {
+        const data = doc.data();
+        const topicId = normalizeId(doc.id);
+        const topicName = data.name || doc.id;
+        const rawChapters = (data.chapters || []) as any[];
+        
+        const chapters: Chapter[] = rawChapters.map((chapterName: string): Chapter => {
+            const chapterId = normalizeId(chapterName);
+            const countKey = `${topicId}_${chapterId}`;
+            return { 
+                id: chapterId, 
+                name: chapterName, 
+                mcqCount: mcqCounts.get(countKey) || 0,
+                flashcardCount: flashcardCounts.get(countKey) || 0,
+                topicId: topicId, 
+                source: 'General' 
+            };
+        }).sort((a, b) => a.name.localeCompare(b.name));
+        
+        topicsMap.set(topicId, {
+          id: topicId, name: topicName, chapters: chapters, chapterCount: chapters.length,
+          totalMcqCount: chapters.reduce((sum, ch) => sum + ch.mcqCount, 0),
+          totalFlashcardCount: chapters.reduce((sum, ch) => sum + ch.flashcardCount, 0),
+          source: 'General'
         });
+    });
+
+    // Process Marrow Topics
+    marrowTopicSnapshot.docs.forEach((doc: QueryDocumentSnapshot) => {
+        const data = doc.data();
+        const topicId = doc.id; // Marrow topics use the doc ID as the topicId
+        const topicName = data.name;
+        const rawChapters = (data.chapters || []) as any[];
+
+        const chapters: Chapter[] = rawChapters.map((chData: any): Chapter => {
+            const chapterId = chData.id;
+            const countKey = `${topicId}_${chapterId}`;
+            return { 
+                ...chData, 
+                id: chapterId,
+                mcqCount: mcqCounts.get(countKey) || 0,
+                flashcardCount: flashcardCounts.get(countKey) || 0,
+                topicId: topicId,
+                source: 'Marrow'
+            };
+        }).sort((a, b) => a.name.localeCompare(b.name));
+
+        topicsMap.set(topicId, {
+            id: topicId, name: topicName, chapters: chapters, chapterCount: chapters.length,
+            totalMcqCount: chapters.reduce((sum, ch) => sum + ch.mcqCount, 0),
+            totalFlashcardCount: chapters.reduce((sum, ch) => sum + ch.flashcardCount, 0),
+            source: 'Marrow'
+        });
+    });
+
+    const allProcessedTopics = Array.from(topicsMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+    const keyClinicalTopics: string[] = keyClinicalTopicsSnapshot.docs.map((doc: QueryDocumentSnapshot) => doc.data().name).sort();
+
+    return {
+      topics: allProcessedTopics, mcqs: allMcqs, flashcards: allFlashcards,
+      labValues: labValues, keyClinicalTopics: keyClinicalTopics,
     };
-
-    processTopics(generalTopicSnapshot, 'General');
-    processTopics(marrowTopicSnapshot, 'Marrow');
-    
-    return Array.from(topicsMap.values()).sort((a: Topic, b: Topic) => a.name.localeCompare(b.name));
-
   } catch (error: any) {
-    console.error("Error fetching topics and chapters:", error);
-    throw new Error(`Failed to load topics: ${error.message || "Unknown error."}`);
+    console.error("Error fetching or processing app data:", error);
+    throw new Error(`Failed to load data: ${error.message || "Unknown error."}`);
   }
 }
 
-/**
- * Fetches all MCQs and Flashcards specifically for a given chapter.
- * This is used for ChapterDetailPage and MCQSessionPage to load content on demand.
- */
-export async function getChapterContent(chapterId: string): Promise<{ mcqs: MCQ[]; flashcards: Flashcard[] }> {
-    if (!chapterId) return { mcqs: [], flashcards: [] };
-    try {
-        const mcqQuery = query(collection(db, 'MasterMCQ'), where('chapterId', '==', chapterId), where('status', '==', 'approved'));
-        const marrowMcqQuery = query(collection(db, 'MarrowMCQ'), where('chapterId', '==', chapterId), where('status', '==', 'approved'));
-        const flashcardQuery = query(collection(db, 'Flashcards'), where('chapterId', '==', chapterId), where('status', '==', 'approved'));
-
-        const [mcqSnapshot, marrowMcqSnapshot, flashcardSnapshot] = await Promise.all([
-            getDocs(mcqQuery), getDocs(marrowMcqQuery), getDocs(flashcardQuery)
-        ]);
-
-        const mcqs: MCQ[] = [
-            ...mcqSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as MCQ)),
-            ...marrowMcqSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as MCQ)),
-        ];
-        const flashcards: Flashcard[] = flashcardSnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Flashcard));
-        return { mcqs, flashcards };
-    } catch (error: any) {
-        console.error(`Error fetching content for chapter ${chapterId}:`, error);
-        throw new Error(`Failed to load chapter content: ${error.message || "Unknown error."}`);
-    }
-}
-
-/**
- * Fetches UserUpload documents by their IDs. Used for retrieving original text references.
- */
 export async function getUserUploadDocuments(uploadIds: string[]): Promise<UserUpload[]> {
     if (!uploadIds || uploadIds.length === 0) return [];
     try {

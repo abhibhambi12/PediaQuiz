@@ -1,54 +1,47 @@
 #!/bin/bash
-# A robust script to build and deploy Firebase Functions from a monorepo.
-set -e # Exit immediately if a command exits with a non-zero status.
 
-# Argument to trigger build-only mode
-if [ "$1" = "build-only" ]; then
-    echo "--- Running a full, clean build of all local workspaces (build-only mode)..."
-    npm run build
+# --- Set Bash Options for Robustness ---
+set -e   # Exit immediately if a command exits with a non-zero status.
+set -o pipefail # Return value of a pipeline is the value of the last (rightmost) command to exit with a non-zero status, or zero if all commands in the pipeline exit successfully.
+set -x   # Print commands and their arguments as they are executed (verbose output for debugging).
 
-    echo "--- Preparing a clean, self-contained deployment package in 'workspaces/functions/dist'..."
-    # Create a clean distribution directory inside functions
-    rm -rf workspaces/functions/dist
-    mkdir -p workspaces/functions/dist
+echo "--- Starting deploy-functions.sh script ---"
 
-    # Copy the essential files for deployment
-    echo "    > Copying compiled functions code (lib) and its package.json..."
-    cp -r workspaces/functions/lib workspaces/functions/dist/
-    cp workspaces/functions/package.json workspaces/functions/dist/
+# --- Step 1: Build all workspace packages locally ---
+# This builds @pediaquiz/types and functions/
+echo "Building all workspace packages: npm run build"
+npm run build || { echo "ERROR: Local build failed!"; exit 1; }
 
-    # --- DEFINITIVE FIX: Run npm install --production inside functions/dist ---
-    # This is critical for resolving `workspace:` dependencies like `@pediaquiz/types`
-    # and all other production dependencies in the Cloud Build environment.
-    echo "    > Installing node_modules within workspaces/functions/dist for deployment..."
-    (cd workspaces/functions/dist && npm install --production)
-    # --- END OF FIX ---
+echo "--- Local build completed. Preparing functions for deployment. ---"
 
-    echo "--- Local build and packaging complete in build-only mode. ---"
-    exit 0
-fi
+# --- Step 2: Prepare functions for deployment ---
+# Navigate into the functions directory
+echo "Navigating to functions directory: cd functions"
+cd functions || { echo "ERROR: Could not navigate to functions directory!"; exit 1; }
 
-# Original deploy logic (if not in build-only mode)
-echo "--- 1. Running a full, clean build of all local workspaces (for direct deploy)..."
-npm run build
+# Remove the symlink for @pediaquiz/types created by npm workspaces
+echo "Removing old @pediaquiz symlink..."
+rm -rf node_modules/@pediaquiz || { echo "WARN: Failed to remove old @pediaquiz symlink (may not exist)."; }
 
-echo "--- 2. Preparing a clean, self-contained deployment package in 'workspaces/functions/dist'..."
+# Create the directory structure for the local package
+echo "Creating node_modules/@pediaquiz/types directory..."
+mkdir -p node_modules/@pediaquiz/types || { echo "ERROR: Failed to create node_modules/@pediaquiz/types directory!"; exit 1; }
 
-# Create a clean distribution directory inside functions
-rm -rf workspaces/functions/dist
-mkdir -p workspaces/functions/dist
+# Copy the BUILT code from the types package into the functions node_modules
+echo "Copying built @pediaquiz/types code..."
+cp ../packages/types/package.json node_modules/@pediaquiz/types/ || { echo "ERROR: Failed to copy types package.json!"; exit 1; }
+cp -r ../packages/types/lib node_modules/@pediaquiz/types/ || { echo "ERROR: Failed to copy types lib folder!"; exit 1; }
 
-# Copy the essential files for deployment
-echo "    > Copying compiled functions code (lib) and its package.json..."
-cp -r workspaces/functions/lib workspaces/functions/dist/
-cp workspaces/functions/package.json workspaces/functions/dist/
+echo "--- Local packages copied. Navigating back to root for Firebase deployment. ---"
 
-# --- DEFINITIVE FIX: Run npm install --production inside functions/dist ---
-echo "    > Installing node_modules within functions/dist for deployment..."
-(cd workspaces/functions/dist && npm install --production)
-# --- END OF FIX ---
+# Navigate back to the root
+echo "Navigating back to root directory: cd .."
+cd .. || { echo "ERROR: Could not navigate back to root directory!"; exit 1; }
 
-echo "--- 3. All preparations complete. Deploying from the 'workspaces/functions/dist' directory..."
-firebase deploy --only functions
+# --- Step 3: Deploy functions to Firebase ---
+echo "--- Initiating Firebase deployment ---"
+# Deploy only the functions
+# This is the actual firebase deploy command
+firebase deploy --only functions || { echo "ERROR: Firebase deployment failed!"; exit 1; }
 
-echo "--- ✅ Deployment script finished successfully! ---"
+echo "--- Deployment script finished successfully! ---"
