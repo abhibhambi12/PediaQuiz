@@ -1,0 +1,29 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    .transform-style-preserve-3d {
+        transform-style: preserve-3d;
+    }
+    .backface-hidden {
+        -webkit-backface-visibility: hidden;
+        backface-visibility: hidden;
+    }
+    .transform-rotate-y-180 {
+        transform: rotateY(180deg);
+    }
+    .animate-fade-in-down {
+        animation: fadeInDown 0.3s ease-out forwards;
+    }
+    @keyframes fadeInDown {
+        from {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+}

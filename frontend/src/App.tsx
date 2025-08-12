@@ -1,0 +1,145 @@
+import React from "react";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  Navigate,
+  Outlet,
+} from "react-router-dom";
+import { AuthProvider, useAuth } from "./contexts/AuthContext";
+import { DataProvider } from "./contexts/DataContext";
+import { ToastProvider } from "./components/Toast";
+import Header from "./components/Header";
+import BottomNav from "./components/BottomNav";
+import AdminRoute from "./components/AdminRoute";
+import Loader from "./components/Loader";
+import FloatingActionButton from "./components/FloatingActionButton"; // Import the new component
+
+// Import Pages
+import HomePage from "./pages/HomePage";
+import AuthPage from "./pages/AuthPage";
+import SettingsPage from "./pages/SettingsPage";
+import FlashcardSessionPage from "./pages/FlashcardSessionPage";
+import ChapterDetailPage from "./pages/ChapterDetailPage";
+import CustomTestBuilder from "./pages/CustomTestBuilder";
+import ChatPage from "./pages/ChatPage";
+import MarrowQBankPage from "./pages/MarrowQBankPage";
+import AdminReviewPage from "./pages/AdminReviewPage";
+import AdminMarrowPage from "./pages/AdminMarrowPage";
+import LogScreenPage from "./pages/LogScreenPage";
+import StatsPage from "./pages/StatsPage";
+import AdminCompletedJobsPage from "./pages/AdminCompletedJobsPage";
+import BookmarksPage from "./pages/BookmarksPage";
+import GeneratorPage from "./pages/GeneratorPage";
+import MCQSessionPage from "./pages/MCQSessionPage";
+import SearchResultsPage from "./pages/SearchResultsPage";
+import TagsPage from "./pages/TagsPage";
+import TagQuestionsPage from "./pages/TagQuestionsPage";
+import ChapterNotesEditPage from "./pages/ChapterNotesEditPage";
+
+const AppLayout: React.FC = () => (
+  <div className="flex flex-col min-h-screen">
+    <Header />
+    <main className="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8 mb-20">
+      <Outlet />
+    </main>
+    <FloatingActionButton /> {/* Add the button here */}
+    <BottomNav />
+  </div>
+);
+
+const AppContent: React.FC = () => {
+  const { user, loading } = useAuth();
+
+  if (loading) return <Loader message="Authenticating..." />;
+
+  return (
+    <Routes>
+      <Route
+        path="/auth"
+        element={!user ? <AuthPage /> : <Navigate to="/" replace />}
+      />
+
+      <Route element={user ? <AppLayout /> : <Navigate to="/auth" replace />}>
+        <Route path="/" element={<HomePage />} />
+        <Route path="/settings" element={<SettingsPage />} />
+        <Route
+          path="/flashcards/:topicId/:chapterId"
+          element={<FlashcardSessionPage />}
+        />
+        <Route
+          path="/chapters/:topicId/:chapterId"
+          element={<ChapterDetailPage />}
+        />
+        <Route path="/custom-test-builder" element={<CustomTestBuilder />} />
+        <Route path="/chat" element={<ChatPage />} />
+        <Route path="/marrow-qbank" element={<MarrowQBankPage />} />
+        <Route path="/stats" element={<StatsPage />} />
+        <Route path="/log-screen" element={<LogScreenPage />} />
+        <Route path="/bookmarks" element={<BookmarksPage />} />
+        <Route path="/session/:mode/:id" element={<MCQSessionPage />} />
+        <Route path="/search" element={<SearchResultsPage />} />
+        
+        <Route path="/tags" element={<TagsPage />} />
+        <Route path="/tags/:tagName" element={<TagQuestionsPage />} />
+
+        <Route
+          path="/admin/marrow/notes/edit/:topicId/:chapterId"
+          element={
+            <AdminRoute>
+              <ChapterNotesEditPage />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/generator"
+          element={
+            <AdminRoute>
+              <GeneratorPage />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/admin/review"
+          element={
+            <AdminRoute>
+              <AdminReviewPage />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/admin/marrow"
+          element={
+            <AdminRoute>
+              <AdminMarrowPage />
+            </AdminRoute>
+          }
+        />
+        <Route
+          path="/admin/completed"
+          element={
+            <AdminRoute>
+              <AdminCompletedJobsPage />
+            </AdminRoute>
+          }
+        />
+      </Route>
+
+      <Route path="*" element={<Navigate to={user ? "/" : "/auth"} replace />} />
+    </Routes>
+  );
+};
+
+const App: React.FC = () => (
+  <ToastProvider>
+    <AuthProvider>
+      <DataProvider>
+        <Router>
+          <AppContent />
+        </Router>
+      </DataProvider>
+    </AuthProvider>
+  </ToastProvider>
+);
+
+export default App;
