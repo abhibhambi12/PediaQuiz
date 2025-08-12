@@ -1,4 +1,5 @@
-// frontend/src/pages/AdminMarrowPage.tsx
+// FILE: frontend/src/pages/AdminMarrowPage.tsx
+
 import React, { useState, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -6,7 +7,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/Toast';
 import { storage } from '@/firebase';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { processMarrowText } from '@/services/aiService';
+import { processMarrowText } from '@/services/aiService'; // NEW IMPORT: for pasting text
+import clsx from 'clsx'; // NEW IMPORT: for conditional styling
 
 const AdminMarrowPage: React.FC = () => {
     const { user } = useAuth();
@@ -18,30 +20,32 @@ const AdminMarrowPage: React.FC = () => {
     const [uploadProgress, setUploadProgress] = useState(0);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const [pastedText, setPastedText] = useState('');
+    const [pastedText, setPastedText] = useState(''); // NEW STATE: for pasted text
 
-    const processTextMutation = useMutation<any, Error, { rawText: string }>({
-        mutationFn: ({ rawText }) => processMarrowText({ rawText, fileName: 'Pasted Text' }),
+    // --- NEW MUTATION: for processing pasted text (Smart Marrow Pipeline) ---
+    const processTextMutation = useMutation<any, Error, { rawText: string, fileName: string }>({
+        mutationFn: (vars) => processMarrowText(vars),
         onSuccess: (data) => {
             const { extractedMcqs, suggestedNewMcqCount } = data.data;
             addToast(`Text processed! Extracted ${extractedMcqs.length} MCQs. AI suggests generating ${suggestedNewMcqCount} new ones.`, "success", 6000);
-            queryClient.invalidateQueries({ queryKey: ['pendingUploads'] });
-            setPastedText('');
-            navigate('/admin/review');
+            queryClient.invalidateQueries({ queryKey: ['pendingUploads'] }); // Invalidate to show new upload in queue
+            setPastedText(''); // Clear textarea after processing
+            navigate('/admin/review'); // Navigate to the review queue to continue the process
         },
         onError: (error) => {
-            addToast(`Error processing text: ${error.message}`, "error");
+            addToast(`Error processing text: ${error.message}`, "error"); // Use 'error' type for toast
         },
     });
+    // --- END NEW MUTATION ---
 
     const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (!file || !user) {
-            addToast('Please select a file and ensure you are logged in.', 'error');
+            addToast('Please select a file and ensure you are logged in.', 'info'); // Use 'info' or 'warning'
             return;
         }
         if (file.type !== 'application/pdf') {
-            addToast('Only PDF files are allowed for the Marrow pipeline.', 'error');
+            addToast('Only PDF files are allowed for the Marrow pipeline.', 'info'); // Use 'info' or 'warning'
             return;
         }
 
@@ -59,7 +63,7 @@ const AdminMarrowPage: React.FC = () => {
                 setUploadProgress(progress);
             },
             (error) => {
-                addToast(`File upload failed: ${error.message}`, "error");
+                addToast(`File upload failed: ${error.message}`, "error"); // Use 'error' type for toast
                 setIsUploading(false);
             },
             () => {
@@ -76,16 +80,19 @@ const AdminMarrowPage: React.FC = () => {
         );
     };
     
+    // --- NEW FUNCTION: handle processing of pasted text ---
     const handleProcessText = () => {
         if (!pastedText.trim() || !user) {
-            addToast('Please paste some text and ensure you are logged in.', 'error');
+            addToast('Please paste some text and ensure you are logged in.', 'info'); // Use 'info' or 'warning'
             return;
         }
-        processTextMutation.mutate({ rawText: pastedText.trim() });
+        processTextMutation.mutate({ rawText: pastedText.trim(), fileName: 'Pasted_Marrow_Text' });
     };
+    // --- END NEW FUNCTION ---
 
     return (
-        <div className="space-y-6">
+        // --- UPDATED CLASSES: Using new Tailwind color palette and animations ---
+        <div className="space-y-6 animate-fade-in-up">
             <h1 className="text-3xl font-bold">Marrow Content Pipeline</h1>
             <p className="text-slate-500 dark:text-slate-400">
                 Upload image-based Marrow PDFs or paste text directly. The system will process the content, and it will then appear in the{" "}
@@ -93,6 +100,7 @@ const AdminMarrowPage: React.FC = () => {
                 for the multi-stage AI extraction and generation process.
             </p>
 
+            {/* Option 1: Upload Marrow PDF */}
             <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md">
                 <h2 className="text-xl font-bold mb-4">Option 1: Upload Marrow PDF</h2>
                 <input
@@ -100,19 +108,24 @@ const AdminMarrowPage: React.FC = () => {
                     ref={fileInputRef}
                     onChange={handleFileChange}
                     accept="application/pdf"
-                    className="block w-full text-sm text-slate-500
-                      file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0
-                      file:text-sm file:font-semibold file:bg-teal-50 file:text-teal-700
-                      hover:file:bg-teal-100 dark:file:bg-teal-900/50 dark:file:text-teal-300 dark:hover:file:bg-teal-900
-                      disabled:opacity-50"
-                    disabled={isUploading || !user}
+                    // --- UPDATED CLASSES: using clsx for conditional styles ---
+                    className={clsx(
+                        "block w-full text-sm text-slate-500",
+                        "file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0",
+                        "file:text-sm file:font-semibold file:bg-teal-50 file:text-teal-700",
+                        "hover:file:bg-teal-100 dark:file:bg-teal-900/50 dark:file:text-teal-300 dark:hover:file:bg-teal-900",
+                        "disabled:opacity-50"
+                    )}
+                    // --- UPDATED DISABLED STATE: Also disable if processTextMutation is pending ---
+                    disabled={isUploading || !user || processTextMutation.isPending}
                 />
                 {isUploading && (
                     <div className="mt-4">
                         <div className="w-full bg-slate-200 rounded-full h-2.5 dark:bg-slate-700">
                             <div className="bg-teal-600 h-2.5 rounded-full" style={{ width: `${uploadProgress}%` }}></div>
                         </div>
-                        <p className="mt-2 text-sm text-center text-teal-500 animate-pulse">
+                        {/* --- UPDATED CLASSES: using new Tailwind animations --- */}
+                        <p className="mt-2 text-sm text-center text-teal-500 animate-pulse-subtle">
                             Uploading... {uploadProgress.toFixed(0)}%
                         </p>
                     </div>
@@ -120,23 +133,29 @@ const AdminMarrowPage: React.FC = () => {
                  {!user && <p className="text-red-500 text-sm mt-2">Please log in to upload files.</p>}
             </div>
 
+            {/* --- NEW SECTION: Option 2: Paste Marrow Text --- */}
             <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md">
                 <h2 className="text-xl font-bold mb-4">Option 2: Paste Marrow Text</h2>
                  <textarea
                     value={pastedText}
                     onChange={(e) => setPastedText(e.target.value)}
                     placeholder="Paste raw text from Marrow or another source here..."
+                    // --- UPDATED CLASSES: using new Tailwind input field style ---
                     className="w-full h-60 p-3 border rounded-md dark:bg-slate-700 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-teal-500"
-                    disabled={processTextMutation.isPending}
+                    // --- UPDATED DISABLED STATE: Disable if either mutation is pending ---
+                    disabled={processTextMutation.isPending || isUploading}
                  />
                  <button
                     onClick={handleProcessText}
-                    disabled={processTextMutation.isPending || !pastedText.trim()}
+                    // --- UPDATED DISABLED STATE: Disable if text is empty or mutations are pending ---
+                    disabled={processTextMutation.isPending || !pastedText.trim() || isUploading}
+                    // --- UPDATED CLASSES: using new Tailwind button style ---
                     className="mt-4 w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3 px-4 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
                  >
                     {processTextMutation.isPending ? 'Processing Text...' : 'Process Pasted Text'}
                  </button>
             </div>
+            {/* --- END NEW SECTION --- */}
         </div>
     );
 };

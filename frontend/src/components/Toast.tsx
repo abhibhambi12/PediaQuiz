@@ -1,9 +1,11 @@
+// FILE: frontend/src/components/Toast.tsx
+
 import React, { useState, useEffect, useCallback, createContext, useContext, ReactNode } from 'react';
 
 interface ToastNotification {
   id: string;
   message: string;
-  type: 'success' | 'error' | 'info';
+  type: 'success' | 'error' | 'info' | 'danger' | 'warning'; // FIXED: Added 'danger' and 'warning' types
   duration?: number;
 }
 
@@ -55,8 +57,9 @@ export const ToastProvider = ({ children }: { children: ReactNode }) => {
               p-4 rounded-lg shadow-2xl text-white font-semibold flex items-center justify-between gap-3
               transition-all duration-300 ease-in-out transform animate-fade-in-down
               ${toast.type === 'success' ? 'bg-green-600' : ''}
-              ${toast.type === 'error' ? 'bg-red-600' : ''}
+              ${toast.type === 'error' || toast.type === 'danger' ? 'bg-red-600' : ''} 
               ${toast.type === 'info' ? 'bg-blue-600' : ''}
+              ${toast.type === 'warning' ? 'bg-amber-500' : ''} 
             `}
             role="alert"
           >

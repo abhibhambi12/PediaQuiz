@@ -9,6 +9,8 @@ export interface User {
     createdAt: Date;
     lastLogin: Date;
     bookmarks?: string[];
+    currentStreak?: number; // NEW: Added for user streak tracking
+    lastStudiedDate?: Date; // NEW: Added for user streak tracking
 }
 
 // --- CONTENT STRUCTURE ---
@@ -103,7 +105,7 @@ export interface Attempt {
     lastAttempted: Date;
     interval?: number;      // Days until next review
     easeFactor?: number;    // SM-2 algorithm ease factor
-    nextReviewDate?: Date;  // The calculated next review date
+    nextReviewDate?: any;  // Changed from Date to any to accommodate Firestore Timestamp
 }
 export interface AttemptedMCQs { [mcqId: string]: Attempt; }
 
@@ -149,6 +151,7 @@ export interface UserUpload {
         extractedMcqs?: Partial<MCQ>[];
         orphanExplanations?: string[];
         generatedMcqs?: Partial<MCQ>[];
+        generatedFlashcards?: Partial<Flashcard>[]; // NEW: Added this property
     };
     suggestedKeyTopics?: string[];
 

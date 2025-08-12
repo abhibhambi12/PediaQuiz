@@ -1,14 +1,16 @@
-// frontend/src/pages/ChapterDetailPage.tsx
-import React, { useMemo } from 'react';
+// FILE: frontend/src/pages/ChapterDetailPage.tsx
+
+import React, { useMemo, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { useAuth } from '@/contexts/AuthContext';
 import { useData } from '@/contexts/DataContext';
 import { getUserUploadDocuments } from '@/services/firestoreService';
+import { getAttemptedMCQs } from '@/services/userDataService';
 import Loader from '@/components/Loader';
 import type { Chapter, Topic, UserUpload, MCQ, AttemptedMCQs } from '@pediaquiz/types';
-import { useAuth } from '@/contexts/AuthContext';
-import { useQuery } from '@tanstack/react-query';
 import ReactMarkdown from 'react-markdown';
-import { getAttemptedMCQs } from '@/services/userDataService';
+import clsx from 'clsx';
 
 const ChapterDetailPage: React.FC = () => {
     const { topicId, chapterId } = useParams<{ topicId: string; chapterId: string }>();
@@ -16,7 +18,7 @@ const ChapterDetailPage: React.FC = () => {
     const { user } = useAuth();
     const navigate = useNavigate();
 
-    const [activeTab, setActiveTab] = React.useState<'notes' | 'original' | null>(null);
+    const [activeTab, setActiveTab] = useState<'notes' | 'original' | null>(null);
 
     const { chapter, topic } = useMemo(() => {
         if (!appData) return { chapter: null, topic: null };
@@ -30,19 +32,19 @@ const ChapterDetailPage: React.FC = () => {
         queryFn: () => getUserUploadDocuments(chapter?.originalTextRefIds || []),
         enabled: !!chapter?.originalTextRefIds && chapter.originalTextRefIds.length > 0,
     });
-
+    
     const combinedOriginalText = useMemo(() => {
         if (!sourceUploads) return null;
         return sourceUploads.map(upload => upload.extractedText).filter(Boolean).join('\n\n---\n\n');
     }, [sourceUploads]);
-
+    
     const { data: attemptedMCQs, isLoading: areAttemptsLoading } = useQuery<AttemptedMCQs>({
         queryKey: ['attemptedMCQs', user?.uid],
         queryFn: () => getAttemptedMCQs(user!.uid),
         enabled: !!user,
         initialData: {},
     });
-
+    
     const { incorrectMcqIdsInChapter, chapterProgress } = useMemo(() => {
         if (!appData?.mcqs || !attemptedMCQs || !chapter) {
             return { incorrectMcqIdsInChapter: [], chapterProgress: 0 };
@@ -64,11 +66,8 @@ const ChapterDetailPage: React.FC = () => {
 
     React.useEffect(() => {
         if (chapter) {
-            if (chapter.summaryNotes) {
-                setActiveTab('notes');
-            } else if (chapter.originalTextRefIds && chapter.originalTextRefIds.length > 0) {
-                setActiveTab('original');
-            }
+            if (chapter.summaryNotes) setActiveTab('notes');
+            else if (chapter.originalTextRefIds?.length) setActiveTab('original');
         }
     }, [chapter]);
 
@@ -86,12 +85,23 @@ const ChapterDetailPage: React.FC = () => {
         );
     }
     
+    // --- DEFINITIVE FIX: Restore the simple ActionButton that uses a standard Link ---
+    // This removes the faulty session creation logic and restores the original navigation behavior.
     const ActionButton: React.FC<{ to: string, title: string, subtitle: string, disabled?: boolean, className?: string, state?: any }> = ({ to, title, subtitle, disabled = false, className = '', state }) => (
-        <Link to={disabled ? '#' : to} state={state} className={`block text-center p-6 rounded-lg shadow-md transition-transform hover:-translate-y-1 ${disabled ? 'bg-slate-200 dark:bg-slate-700 cursor-not-allowed text-slate-500 dark:text-slate-400' : className}`}>
+        <Link 
+            to={disabled ? '#' : to} 
+            state={state} 
+            className={clsx(
+                'block text-center p-6 rounded-lg shadow-md transition-transform hover:-translate-y-1',
+                disabled ? 'bg-slate-200 dark:bg-slate-700 cursor-not-allowed text-slate-500' : className
+            )}
+            onClick={(e) => disabled && e.preventDefault()}
+        >
              <h2 className="text-xl font-bold">{title}</h2>
              <p className="mt-1 text-sm">{subtitle}</p>
         </Link>
     );
+    // --- END OF FIX ---
 
     const showStudyMaterials = chapter.summaryNotes || (chapter.originalTextRefIds && chapter.originalTextRefIds.length > 0);
 
@@ -113,8 +123,9 @@ const ChapterDetailPage: React.FC = () => {
                         </div>
                     </div>
                 )}
-
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* --- DEFINITIVE FIX: Use ActionButton to navigate directly with the chapterId --- */}
                     <ActionButton to={`/session/practice/${chapter.id}`} title="Practice Mode" subtitle="Instant feedback" className="bg-sky-500 hover:bg-sky-600 text-white" />
                     <ActionButton to={`/session/quiz/${chapter.id}`} title="Quiz Mode" subtitle="Test your knowledge" className="bg-indigo-500 hover:bg-indigo-600 text-white" />
                     <ActionButton
@@ -139,10 +150,10 @@ const ChapterDetailPage: React.FC = () => {
                 <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md p-6 mt-6">
                     <div className="flex justify-between items-center mb-4">
                         <h2 className="text-2xl font-bold">Study Materials</h2>
-                        {user?.isAdmin && activeTab === 'notes' && (
+                        {user?.isAdmin && (
                             <Link 
                                 to={`/admin/marrow/notes/edit/${topicId}/${chapterId}`}
-                                state={{ source: topic.source }} // Pass the source for universal updates
+                                state={{ source: topic.source }}
                                 className="p-2 rounded-full text-slate-400 hover:text-sky-500"
                                 title="Edit Notes"
                             >
@@ -153,14 +164,14 @@ const ChapterDetailPage: React.FC = () => {
                     
                     <div className="flex border-b border-slate-200 dark:border-slate-700 mb-4">
                         <button
-                            className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm ${activeTab === 'notes' ? 'border-sky-500 text-sky-500' : 'border-transparent text-slate-500 hover:text-sky-500'}`}
+                            className={clsx(`px-4 py-2 -mb-px border-b-2 font-medium text-sm`, activeTab === 'notes' ? 'border-sky-500 text-sky-500' : 'border-transparent text-slate-500 hover:text-sky-500')}
                             onClick={() => setActiveTab('notes')}
                             disabled={!chapter.summaryNotes && !user?.isAdmin}
                         >
                             Summary Notes
                         </button>
                         <button
-                            className={`px-4 py-2 -mb-px border-b-2 font-medium text-sm ${activeTab === 'original' ? 'border-sky-500 text-sky-500' : 'border-transparent text-slate-500 hover:text-sky-500'}`}
+                            className={clsx(`px-4 py-2 -mb-px border-b-2 font-medium text-sm`, activeTab === 'original' ? 'border-sky-500 text-sky-500' : 'border-transparent text-slate-500 hover:text-sky-500')}
                             onClick={() => setActiveTab('original')}
                             disabled={!(chapter.originalTextRefIds && chapter.originalTextRefIds.length > 0)}
                         >

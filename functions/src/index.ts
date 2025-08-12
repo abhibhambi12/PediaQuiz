@@ -1,33 +1,23 @@
+// FILE: functions/src/index.ts
+// This is the complete and corrected file. It contains ALL of your original functions
+// with the specified new features and bug fixes.
+
 /* eslint-disable max-len */
-// functions/src/index.ts
-
-// --- Firebase Admin SDK Imports ---
 import * as admin from "firebase-admin";
-// UserRecord is specifically for the Auth V1 trigger (onUserCreate)
 import { UserRecord } from "firebase-admin/auth";
-// Explicitly import Firestore types to prevent 'Cannot find module' or implicit 'any'
-import { FieldValue, Transaction, QueryDocumentSnapshot } from "firebase-admin/firestore";
-
-// --- Firebase Functions V2 Imports for Callable, Storage, and Firestore Triggers ---
+import { FieldValue, Transaction, QueryDocumentSnapshot, Timestamp } from "firebase-admin/firestore";
 import { onCall, CallableRequest, HttpsError, CallableOptions } from "firebase-functions/v2/https";
 import { onObjectFinalized } from "firebase-functions/v2/storage";
 import { setGlobalOptions } from "firebase-functions/v2";
 import { onDocumentUpdated } from "firebase-functions/v2/firestore";
+import { onSchedule } from "firebase-functions/v2/scheduler"; // NEW IMPORT: for scheduled functions
 import * as logger from "firebase-functions/logger";
-
-// --- Firebase Functions V1 Import for Auth Trigger (Specific to onUserCreate) ---
 import * as functionsV1 from "firebase-functions";
-
-// --- Google Cloud SDKs for AI and Vision APIs ---
 import { ImageAnnotatorClient, protos } from "@google-cloud/vision";
 import { VertexAI, GenerativeModel, Content } from "@google-cloud/vertexai";
-
-// --- Node.js Built-in Modules for File Operations ---
 import * as path from "path";
 import * as os from "os";
 import * as fs from "fs";
-
-// --- Shared Types from Monorepo (Crucial for Type Safety Across Workspaces) ---
 import {
   MCQ, ChatMessage, UserUpload, QuizResult, Chapter, UploadStatus, AttemptedMCQs,
   ToggleBookmarkCallableData, DeleteContentItemCallableData, AssignmentSuggestion,
@@ -173,9 +163,8 @@ export const onContentReadyForReview = onDocumentUpdated({
     document: "userUploads/{uploadId}", region: LOCATION, memory: '1GiB', cpu: 1, timeoutSeconds: 300,
 }, async (event) => {
     ensureClientsInitialized();
-    const before = event.data?.before.data() as UserUpload | undefined;
     const after = event.data?.after.data() as UserUpload | undefined;
-    if (!before || !after || after.status !== 'pending_final_review') return;
+    if (!after || after.status !== 'pending_final_review') return;
     const content = after.finalAwaitingReviewData;
     if (!content || (!content.mcqs?.length && !content.flashcards?.length)) return;
     const contentSample = JSON.stringify({
@@ -211,6 +200,47 @@ export const addquizresult = onCall(LIGHT_FUNCTION_OPTIONS, async (request: Call
     const quizData = request.data;
     const resultRef = db.collection('quizResults').doc();
     await resultRef.set({ ...quizData, id: resultRef.id, userId, date: FieldValue.serverTimestamp() });
+
+    // --- NEW FEATURE: Update User Study Streak (on quiz completion) ---
+    const userRef = db.collection('users').doc(userId);
+    const userDoc = await userRef.get();
+    const userData = userDoc.data();
+
+    if (userData) {
+        const lastStudiedDate = (userData.lastStudiedDate as Timestamp)?.toDate();
+        const today = new Date();
+        today.setHours(0, 0, 0, 0); // Normalize to start of day
+        const yesterday = new Date(today);
+        yesterday.setDate(today.getDate() - 1);
+
+        let newStreak = userData.currentStreak || 0;
+        if (lastStudiedDate) {
+            const lastStudyDay = lastStudiedDate;
+            lastStudyDay.setHours(0, 0, 0, 0);
+
+            if (lastStudyDay.getTime() === today.getTime()) {
+                // Already studied today, streak doesn't change
+                newStreak = userData.currentStreak;
+            } else if (lastStudyDay.getTime() === yesterday.getTime()) {
+                // Studied yesterday, continue streak
+                newStreak++;
+            } else {
+                // Break in streak, reset
+                newStreak = 1;
+            }
+        } else {
+            // First study ever, start streak
+            newStreak = 1;
+        }
+
+        await userRef.update({
+            currentStreak: newStreak,
+            lastStudiedDate: FieldValue.serverTimestamp(),
+        });
+        logger.info(`User ${userId} completed quiz. Streak: ${newStreak}`);
+    }
+    // --- END NEW FEATURE ---
+
     return { success: true, id: resultRef.id };
 });
 
@@ -251,6 +281,46 @@ export const addattempt = onCall(LIGHT_FUNCTION_OPTIONS, async (request: Callabl
             nextReviewDate,
         };
         transaction.set(attemptRef, updatePayload, { merge: true });
+
+        // --- NEW FEATURE: Update User Study Streak (on MCQ attempt) ---
+        const userRef = db.collection('users').doc(userId);
+        const userDoc = await transaction.get(userRef); // Use transaction.get within a transaction
+        const userData = userDoc.data();
+
+        if (userData) {
+            const lastStudiedDate = (userData.lastStudiedDate as Timestamp)?.toDate();
+            const today = new Date();
+            today.setHours(0, 0, 0, 0); // Normalize to start of day
+            const yesterday = new Date(today);
+            yesterday.setDate(today.getDate() - 1);
+
+            let newStreak = userData.currentStreak || 0;
+            if (lastStudiedDate) {
+                const lastStudyDay = lastStudiedDate;
+                lastStudyDay.setHours(0, 0, 0, 0);
+
+                if (lastStudyDay.getTime() === today.getTime()) {
+                    // Already studied today, streak doesn't change
+                    newStreak = userData.currentStreak;
+                } else if (lastStudyDay.getTime() === yesterday.getTime()) {
+                    // Studied yesterday, continue streak
+                    newStreak++;
+                } else {
+                    // Break in streak, reset
+                    newStreak = 1;
+                }
+            } else {
+                // First study ever, start streak
+                newStreak = 1;
+            }
+
+            transaction.update(userRef, { // Use transaction.update within a transaction
+                currentStreak: newStreak,
+                lastStudiedDate: FieldValue.serverTimestamp(),
+            });
+            logger.info(`User ${userId} attempted MCQ. Streak: ${newStreak}`);
+        }
+        // --- END NEW FEATURE ---
     });
     return { success: true };
 });
@@ -271,6 +341,32 @@ export const togglebookmark = onCall(LIGHT_FUNCTION_OPTIONS, async (request: Cal
         return { bookmarked: true, bookmarks: [...bookmarks, contentId] };
     }
 });
+
+// --- NEW FEATURE: Callable for adding Flashcard Attempts (Spaced Repetition) ---
+export const addFlashcardAttempt = onCall(LIGHT_FUNCTION_OPTIONS, async (request: CallableRequest<{ flashcardId: string, rating: 'again' | 'good' | 'easy' }>) => {
+    if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Authentication required.");
+    const userId = request.auth.uid;
+    const { flashcardId, rating } = request.data;
+
+    if (!flashcardId || !rating) throw new HttpsError("invalid-argument", "Flashcard ID and rating are required.");
+
+    // This is a simplified implementation for the spaced repetition.
+    // A more advanced version would update `interval`, `easeFactor`, `nextReviewDate`
+    // similar to how `addattempt` does for MCQs.
+    const attemptRef = db.collection("users").doc(userId).collection("attemptedFlashcards").doc(flashcardId);
+
+    await attemptRef.set({
+        lastReviewed: FieldValue.serverTimestamp(),
+        rating: rating, // Store the rating
+        attempts: FieldValue.increment(1), // Increment attempt count
+        userId: userId,
+    }, { merge: true });
+
+    logger.info(`Flashcard ${flashcardId} rated as '${rating}' by user ${userId}.`);
+    return { success: true };
+});
+// --- END NEW FEATURE ---
+
 
 // =============================================================================
 //
@@ -297,6 +393,27 @@ export const createUploadFromText = onCall(LIGHT_FUNCTION_OPTIONS, async (reques
     await userUploadRef.set(newUpload);
     return { success: true, uploadId: userUploadRef.id };
 });
+
+// --- NEW FEATURE: Process raw text input for Marrow content (from AdminMarrowPage) ---
+export const processMarrowText = onCall(LIGHT_FUNCTION_OPTIONS, async (request: CallableRequest<{ rawText: string, fileName: string }>) => {
+    if (!request.auth?.token?.isAdmin) throw new HttpsError("permission-denied", "Admin access required.");
+    const { rawText, fileName } = request.data;
+    const userId = request.auth.uid;
+    const userUploadRef = db.collection("userUploads").doc();
+    const finalFileName = `MARROW_PASTED_${Date.now()}_${fileName}`;
+    
+    const newUpload: Partial<UserUpload> = {
+        id: userUploadRef.id, userId, fileName: finalFileName, createdAt: new Date(),
+        extractedText: rawText, status: 'pending_generation_decision', // Directly move to generation decision for pasted text
+        stagedContent: { orphanExplanations: [rawText], extractedMcqs: [], generatedMcqs: [] }, // Stage the text as an orphan explanation
+    };
+    await userUploadRef.set(newUpload);
+    logger.info(`New Marrow text upload created from paste: ${userUploadRef.id}`);
+    // Simulate extraction for immediate feedback in frontend
+    return { success: true, uploadId: userUploadRef.id, extractedMcqs: [], suggestedNewMcqCount: Math.ceil(rawText.length / 500) };
+});
+// --- END NEW FEATURE ---
+
 
 export const extractMarrowContent = onCall(HEAVY_FUNCTION_OPTIONS, async (request: CallableRequest<{ uploadId: string }>) => {
     if (!request.auth?.token?.isAdmin) throw new HttpsError("permission-denied", "Admin access required.");
@@ -656,6 +773,12 @@ export const autoAssignContent = onCall(HEAVY_FUNCTION_OPTIONS, async (request: 
     }
 });
 
+// =============================================================================
+//
+//   AI-POWERED FEATURE FUNCTIONS
+//
+// =============================================================================
+
 export const getDailyWarmupQuiz = onCall(LIGHT_FUNCTION_OPTIONS, async (request: CallableRequest<never>) => {
     if (!request.auth?.uid) throw new HttpsError("unauthenticated", "Authentication required.");
     ensureClientsInitialized();
@@ -718,14 +841,27 @@ export const getExpandedSearchTerms = onCall(LIGHT_FUNCTION_OPTIONS, async (requ
     return { terms: Array.from(new Set([query, ...terms].map(t => String(t).trim()).filter(Boolean))) };
 });
 
-export const generateWeaknessBasedTest = onCall(LIGHT_FUNCTION_OPTIONS, async (request: CallableRequest<{ allMcqs: Pick<MCQ, 'id'>[], testSize: number }>) => {
+export const generateWeaknessBasedTest = onCall(LIGHT_FUNCTION_OPTIONS, async (request: CallableRequest<{ attempted: AttemptedMCQs, allMcqs: Pick<MCQ, 'id' | 'topicId' | 'chapterId' | 'source' | 'tags'>[], testSize: number }>) => {
     if (!request.auth) throw new HttpsError("unauthenticated", "Authentication required.");
     ensureClientsInitialized();
     const { allMcqs, testSize } = request.data;
-    const prompt = `From the provided list of MCQs the user has previously answered incorrectly, select ${testSize} questions... DATA: """${JSON.stringify({ mcqsAvailable: allMcqs.map(m => m.id) })}"""`;
-    const result = await _quickModel.generateContent(prompt);
-    const mcqIds = extractJson(result.response.candidates?.[0]?.content.parts?.[0]?.text || '[]');
-    return { mcqIds: Array.isArray(mcqIds) ? mcqIds : [] };
+    // THIS IS THE CORRECTED, MORE DETAILED PROMPT
+    const prompt = `From the provided list of MCQs (which are questions the user has previously answered incorrectly), select exactly ${testSize} questions that provide a good variety of topics and difficulty. Prioritize questions the user got wrong more recently or more frequently. Return ONLY a valid JSON array of the selected MCQ IDs. If fewer than ${testSize} MCQs are available, return all available. DATA: """${JSON.stringify({ mcqIdsAvailable: allMcqs.map(m => m.id) })}"""`;
+    
+    try {
+        const result = await _quickModel.generateContent(prompt);
+        const mcqIds = extractJson(result.response.candidates?.[0]?.content.parts?.[0]?.text || '[]');
+        if (!Array.isArray(mcqIds)) {
+            logger.warn(`AI returned non-array for weakness test IDs. Falling back to empty array. Raw: ${result.response.candidates?.[0]?.content.parts?.[0]?.text}`);
+            return { mcqIds: [] };
+        }
+        logger.info(`Generated weakness test with ${mcqIds.length} MCQs.`);
+        return { mcqIds };
+    } catch (e: unknown) {
+        const err = e as Error;
+        logger.error(`Failed to generate weakness test: ${err.message}`, err);
+        throw new HttpsError("internal", `Failed to generate weakness test: ${err.message}`);
+    }
 });
 
 export const chatWithAssistant = onCall(LIGHT_FUNCTION_OPTIONS, async (request: CallableRequest<{ prompt: string; history: ChatMessage[] }>): Promise<{ response: string; generatedQuiz?: MCQ[] }> => {
@@ -761,4 +897,37 @@ export const generatePerformanceAdvice = onCall(LIGHT_FUNCTION_OPTIONS, async (r
         const err = e as Error;
         throw new HttpsError("internal", `Performance advice generation failed: ${err.message}`);
     }
+});
+
+
+// =============================================================================
+//
+//   NEW SCHEDULED FUNCTION
+//
+// =============================================================================
+
+/**
+ * Runs every 6 hours to clean up expired quiz session documents from Firestore.
+ */
+export const cleanupExpiredSessions = onSchedule({
+    schedule: "every 6 hours",
+    region: LOCATION,
+}, async () => {
+    const now = Timestamp.now();
+    const expiredSessionsQuery = db.collection('quizSessions').where('expiresAt', '<=', now);
+    
+    const snapshot = await expiredSessionsQuery.get();
+    
+    if (snapshot.empty) {
+        logger.info("No expired sessions to clean up.");
+        return;
+    }
+
+    const batch = db.batch();
+    snapshot.docs.forEach(doc => {
+        batch.delete(doc.ref);
+    });
+
+    await batch.commit();
+    logger.info(`Cleaned up ${snapshot.size} expired quiz sessions.`);
 });

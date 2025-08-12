@@ -1,18 +1,21 @@
-// frontend/src/pages/SearchResultsPage.tsx
+// FILE: frontend/src/pages/SearchResultsPage.tsx
+// MODIFIED: Styling updates only. Continues to use `useData()` for content.
+
 import React, { useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
-import { useData } from '@/contexts/DataContext';
+import { useData } from '@/contexts/DataContext'; // IMPORTANT: Using useData for appData
 import Loader from '@/components/Loader';
 import SearchResultItem from '@/components/SearchResultItem';
 import { MCQ, Flashcard } from '@pediaquiz/types';
 
 const SearchResultsPage: React.FC = () => {
     const { state } = useLocation();
-    const { data: appData, isLoading } = useData();
+    const { data: appData, isLoading } = useData(); // IMPORTANT: Using useData
     const query = state?.query || '';
     const allTerms: string[] = state?.allTerms || (query ? [query] : []);
 
     const searchResults = useMemo(() => {
+        // IMPORTANT: Filters directly from appData.mcqs and appData.flashcards
         if (!appData || allTerms.length === 0) return [];
 
         const lowerCaseTerms = allTerms.map(term => term.toLowerCase());
@@ -38,7 +41,7 @@ const SearchResultsPage: React.FC = () => {
         });
         
         return [...matchingMcqs, ...matchingFlashcards];
-    }, [appData, allTerms]);
+    }, [appData, allTerms]); // DEPENDS ON appData
 
     if (isLoading) return <Loader message={`Searching for "${query}"...`} />;
 
@@ -55,7 +58,8 @@ const SearchResultsPage: React.FC = () => {
             <p className="text-slate-500">{searchResults.length} result(s) found.</p>
 
             {searchResults.length === 0 ? (
-                <div className="text-center py-10 bg-white dark:bg-slate-800 rounded-lg shadow-md">
+                // --- UPDATED CLASSES: using card-base utility class ---
+                <div className="text-center py-10 card-base">
                     <p className="text-slate-500">No content found matching your search term.</p>
                 </div>
             ) : (

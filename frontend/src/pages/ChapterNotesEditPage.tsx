@@ -1,12 +1,13 @@
-// frontend/src/pages/ChapterNotesEditPage.tsx
+// FILE: frontend/src/pages/ChapterNotesEditPage.tsx
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useData } from '@/contexts/DataContext';
+import { useData } from '@/contexts/DataContext'; // IMPORTANT: Use useData
 import { updateChapterNotes } from '@/services/aiService';
 import Loader from '@/components/Loader';
 import { useToast } from '@/components/Toast';
-import { Topic, Chapter } from '@pediaquiz/types';
+import { Topic, Chapter } from '@pediaquiz/types'; // FIXED: Ensure types are imported
 
 const ChapterNotesEditPage: React.FC = () => {
     const { topicId, chapterId } = useParams<{ topicId: string; chapterId: string }>();
@@ -14,14 +15,14 @@ const ChapterNotesEditPage: React.FC = () => {
     const location = useLocation();
     const { addToast } = useToast();
     const queryClient = useQueryClient();
-    const { data: appData, isLoading: isAppDataLoading, error: appDataError } = useData();
+    const { data: appData, isLoading: isAppDataLoading, error: appDataError } = useData(); // IMPORTANT: Using useData
 
     const { chapter, topic } = React.useMemo(() => {
         if (!appData) return { chapter: null, topic: null };
         const foundTopic = appData.topics.find((t: Topic) => t.id === topicId);
         const foundChapter = foundTopic?.chapters.find((ch: Chapter) => ch.id === chapterId);
         return { chapter: foundChapter || null, topic: foundTopic || null };
-    }, [appData, topicId, chapterId]);
+    }, [appData, topicId, chapterId]); // DEPENDS ON appData
 
     const [notesContent, setNotesContent] = useState<string>('');
     const source = location.state?.source as 'General' | 'Marrow' | undefined;
@@ -36,7 +37,7 @@ const ChapterNotesEditPage: React.FC = () => {
         mutationFn: updateChapterNotes,
         onSuccess: () => {
             addToast("Chapter notes saved successfully!", 'success');
-            queryClient.invalidateQueries({ queryKey: ['appData'] });
+            queryClient.invalidateQueries({ queryKey: ['appData'] }); // Invalidate all app data to refetch notes
             navigate(`/chapters/${topicId}/${chapterId}`);
         },
         onError: (error) => addToast(`Failed to save notes: ${error.message}`, 'error'),
@@ -50,7 +51,7 @@ const ChapterNotesEditPage: React.FC = () => {
         updateNotesMutation.mutate({ topicId: topic.id, chapterId: chapter.id, newSummary: notesContent, source });
     };
 
-    if (isAppDataLoading) return <Loader message="Loading chapter for notes..." />;
+    if (isAppDataLoading) return <Loader message="Loading chapter for notes..." />; // DEPENDS ON isAppDataLoading
     if (appDataError) return <div className="text-center py-10 text-red-500">Error: {appDataError.message}</div>;
     if (!chapter || !topic) {
         return <div className="text-center py-10">Chapter or Topic not found.</div>;

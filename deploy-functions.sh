@@ -17,11 +17,13 @@ if [ "$1" = "build-only" ]; then
     cp -r functions/lib functions/dist/
     cp functions/package.json functions/dist/
 
-    # Create the node_modules structure and copy the bundled local dependency
-    echo "    > Physically bundling local dependency @pediaquiz/types..."
-    mkdir -p functions/dist/node_modules/@pediaquiz
-    cp -r packages/types/lib functions/dist/node_modules/@pediaquiz/types
-    cp packages/types/package.json functions/dist/node_modules/@pediaquiz/types/
+    # --- DEFINITIVE FIX: Run npm install --production inside functions/dist ---
+    # This is critical for resolving `file:` dependencies like `@pediaquiz/types`
+    # and all other production dependencies in the Cloud Build environment.
+    echo "    > Installing node_modules within functions/dist for deployment..."
+    (cd functions/dist && npm install --production)
+    # --- END OF FIX ---
+
     echo "--- Local build and packaging complete in build-only mode. ---"
     exit 0
 fi
@@ -41,11 +43,10 @@ echo "    > Copying compiled functions code (lib) and its package.json..."
 cp -r functions/lib functions/dist/
 cp functions/package.json functions/dist/
 
-# Create the node_modules structure and copy the bundled local dependency
-echo "    > Physically bundling local dependency @pediaquiz/types..."
-mkdir -p functions/dist/node_modules/@pediaquiz
-cp -r packages/types/lib functions/dist/node_modules/@pediaquiz/types
-cp packages/types/package.json functions/dist/node_modules/@pediaquiz/types/
+# --- DEFINITIVE FIX: Run npm install --production inside functions/dist ---
+echo "    > Installing node_modules within functions/dist for deployment..."
+(cd functions/dist && npm install --production)
+# --- END OF FIX ---
 
 echo "--- 3. All preparations complete. Deploying from the 'functions/dist' directory..."
 firebase deploy --only functions

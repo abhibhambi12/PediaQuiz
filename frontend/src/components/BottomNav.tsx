@@ -1,3 +1,5 @@
+// FILE: frontend/src/components/BottomNav.tsx
+
 import { Link, useLocation } from 'react-router-dom';
 import { HomeIcon, BookmarkIcon, ChartBarIcon, CogIcon, BookIcon } from './Icons';
 
@@ -12,9 +14,11 @@ const BottomNav: React.FC = () => {
     ];
 
     return (
+        // --- UPDATED CLASSES: Using new Tailwind color palette and styles ---
         <nav className="fixed bottom-0 left-0 right-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm border-t border-slate-200 dark:border-slate-700 z-50">
             <div className="container mx-auto px-4 sm:px-6 lg:px-8 grid grid-cols-5">
                 {navItems.map(item => {
+                    // Adjusted isActive logic to highlight parent paths (e.g., /tags highlights for /tags/some-tag)
                     const isActive = location.pathname.startsWith(item.path) && item.path !== '/' || location.pathname === item.path;
                     return (
                         <Link 
@@ -27,6 +31,7 @@ const BottomNav: React.FC = () => {
                             }`}
                         >
                             {item.icon}
+                            {/* --- UPDATED CLASSES --- */}
                             <span className="text-xs font-medium mt-1">{item.label}</span>
                         </Link>
                     );

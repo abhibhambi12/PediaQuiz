@@ -1,17 +1,20 @@
+// FILE: frontend/src/pages/BookmarksPage.tsx
+// MODIFIED: Styling updates only. Continues to use `useData()` for content.
+
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
-import { useData } from '@/contexts/DataContext';
+import { useData } from '@/contexts/DataContext'; // IMPORTANT: Using useData for appData
 import { getBookmarks } from '@/services/userDataService';
 import Loader from '@/components/Loader';
 import SearchResultItem from '@/components/SearchResultItem';
 import { MCQ, Flashcard, Topic, Chapter } from '@pediaquiz/types';
-import { ChevronDownIcon, ChevronRightIcon } from '@/components/Icons';
-import { Link } from 'react-router-dom';
+import { ChevronDownIcon } from '@/components/Icons';
+import clsx from 'clsx'; // NEW IMPORT for conditional styling
 
 const BookmarksPage: React.FC = () => {
     const { user } = useAuth();
-    const { data: appData, isLoading: isAppDataLoading } = useData();
+    const { data: appData, isLoading: isAppDataLoading } = useData(); // IMPORTANT: Using useData
     const [expandedTopics, setExpandedTopics] = useState<Set<string>>(new Set());
 
     const { data: bookmarkIds, isLoading: areBookmarksLoading } = useQuery({
@@ -22,6 +25,7 @@ const BookmarksPage: React.FC = () => {
     });
 
     const groupedBookmarks = useMemo(() => {
+        // IMPORTANT: Filters directly from appData.mcqs and appData.flashcards
         if (!appData || !bookmarkIds || bookmarkIds.length === 0) return [];
 
         const bookmarkSet = new Set(bookmarkIds);
@@ -47,7 +51,7 @@ const BookmarksPage: React.FC = () => {
         });
 
         return Object.values(groups);
-    }, [appData, bookmarkIds]);
+    }, [appData, bookmarkIds]); // DEPENDS ON appData
 
     const toggleTopic = (topicId: string) => {
         setExpandedTopics(prev => {
@@ -57,7 +61,7 @@ const BookmarksPage: React.FC = () => {
         });
     };
     
-    const isLoading = isAppDataLoading || areBookmarksLoading;
+    const isLoading = isAppDataLoading || areBookmarksLoading; // DEPENDS ON isAppDataLoading
 
     if (isLoading) return <Loader message="Loading bookmarks..." />;
 
@@ -66,7 +70,8 @@ const BookmarksPage: React.FC = () => {
             <h1 className="text-3xl font-bold">Your Bookmarks</h1>
             
             {groupedBookmarks.length === 0 ? (
-                <div className="text-center py-8 bg-white dark:bg-slate-800 rounded-lg shadow-md">
+                // --- UPDATED CLASSES: using card-base utility class ---
+                <div className="text-center py-8 card-base">
                     <p className="text-slate-500">You haven't bookmarked any items yet.</p>
                     <p className="text-sm text-slate-400 mt-1">Click the bookmark icon during a session to save an item for review.</p>
                 </div>
@@ -75,7 +80,8 @@ const BookmarksPage: React.FC = () => {
                     {groupedBookmarks.map(({ topic, chapters }) => {
                         const isExpanded = expandedTopics.has(topic.id);
                         return (
-                            <div key={topic.id} className="bg-white dark:bg-slate-800 rounded-xl shadow-sm overflow-hidden">
+                            // --- UPDATED CLASSES: using card-base utility class ---
+                            <div key={topic.id} className="card-base overflow-hidden">
                                 <div 
                                     className="w-full text-left p-4 flex justify-between items-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50"
                                     onClick={() => toggleTopic(topic.id)}
@@ -84,7 +90,7 @@ const BookmarksPage: React.FC = () => {
                                         <h3 className="font-bold text-lg text-slate-800 dark:text-slate-200">{topic.name}</h3>
                                         <p className="text-sm text-slate-500 dark:text-slate-400">{topic.source}</p>
                                     </div>
-                                    <ChevronDownIcon className={`transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+                                    <ChevronDownIcon className={clsx(`transition-transform duration-300`, isExpanded ? 'rotate-180' : '')} />
                                 </div>
                                 {isExpanded && (
                                     <div className="p-4 border-t border-slate-200 dark:border-slate-700 space-y-3">

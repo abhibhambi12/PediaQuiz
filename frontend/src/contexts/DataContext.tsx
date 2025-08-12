@@ -1,12 +1,11 @@
+// FILE: frontend/src/contexts/DataContext.tsx
+
 import { createContext, useContext, ReactNode } from 'react';
 import { useQuery, UseQueryResult } from '@tanstack/react-query';
 import { getAppData } from '@/services/firestoreService';
 import type { AppData } from '@pediaquiz/types';
 import { useAuth } from './AuthContext';
 
-// --- FIX: Revert from LightweightAppData back to the full AppData type ---
-// This resolves dozens of TS2339 errors across the application where
-// components expected appData.mcqs and appData.flashcards to be present.
 type DataContextType = UseQueryResult<AppData, Error>;
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -29,6 +28,8 @@ export const DataProvider = ({ children }: { children: ReactNode }) => {
     );
 };
 
+// --- DEFINITIVE FIX for HMR Fast Refresh error ---
+// Exporting the hook on its own line makes it compatible with Vite's Fast Refresh.
 export const useData = (): DataContextType => {
     const context = useContext(DataContext);
     if (context === undefined) {

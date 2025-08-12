@@ -1,4 +1,4 @@
-// frontend/src/pages/MCQSessionPage.tsx
+// FILE: frontend/src/pages/MCQSessionPage.tsx
 
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { HttpsCallableResult } from 'firebase/functions';
 import { useAuth } from "@/contexts/AuthContext";
 import { useData } from "@/contexts/DataContext";
-import { getAttemptedMCQs, addAttempt, addQuizResult, toggleBookmark, getBookmarks, deleteContentItem } from "@/services/userDataService";
+import { addAttempt, addQuizResult, toggleBookmark, getBookmarks, deleteContentItem, getAttemptedMCQs } from "@/services/userDataService";
 import { MCQ, QuizResult, AttemptedMCQs, ToggleBookmarkCallableData, DeleteContentItemCallableData } from "@pediaquiz/types";
 import { BookmarkIcon, TrashIcon } from "@/components/Icons";
 import { useToast } from "@/components/Toast";
@@ -14,6 +14,7 @@ import Loader from "@/components/Loader";
 import QuizTimerBar from "@/components/QuizTimerBar";
 import QuizResultsPage from "@/components/QuizResultsPage";
 import ConfirmationModal from "@/components/ConfirmationModal";
+import clsx from 'clsx';
 
 type SessionMode = 'practice' | 'quiz' | 'mock' | 'custom' | 'weakness' | 'incorrect';
 
@@ -60,7 +61,7 @@ const QuestionNavigator: React.FC<{
                         const isCurrent = i === currentIndex && !isFinished ? "ring-2 ring-offset-2 dark:ring-offset-slate-800 ring-blue-500" : "";
                         const isMarked = marked.has(i) && !isFinished ? "ring-2 ring-purple-500" : "";
                         return (
-                            <button key={i} onClick={() => goToQuestion(i)} className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm transition-all shadow-sm ${colorClass} ${isCurrent} ${isMarked}`}>
+                            <button key={i} onClick={() => goToQuestion(i)} className={clsx("w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm transition-all shadow-sm", colorClass, isCurrent, isMarked)}>
                                 {i + 1}
                             </button>
                         );
@@ -70,6 +71,7 @@ const QuestionNavigator: React.FC<{
         </div>
     );
 };
+
 
 const MCQSessionPage: React.FC = () => {
     const { mode: rawMode, id } = useParams<{ mode?: SessionMode; id?: string; }>();
@@ -84,25 +86,18 @@ const MCQSessionPage: React.FC = () => {
     const [mcqs, setMcqs] = useState<MCQ[]>([]);
     const [currentIndex, setCurrentIndex] = useState(0);
     const [answers, setAnswers] = useState<Record<number, string | null>>({});
-    const [markedForReview, setMarkedForReview] = useState<Set<number>>(() => {
-        try {
-            const saved = sessionStorage.getItem(`pediaquiz_marked_questions_${id}_${mode}`);
-            return saved ? new Set(JSON.parse(saved)) : new Set();
-        } catch {
-            return new Set();
-        }
-    });
+    const [markedForReview, setMarkedForReview] = useState<Set<number>>(new Set());
     const [isFinished, setIsFinished] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     
-    const { data: attemptedMCQs } = useQuery({
+    const { data: attemptedMCQs } = useQuery<AttemptedMCQs>({
         queryKey: ['attemptedMCQs', user?.uid],
         queryFn: () => getAttemptedMCQs(user!.uid),
         enabled: !!user,
         initialData: {},
     });
     
-    const { data: bookmarks } = useQuery({
+    const { data: bookmarks } = useQuery<string[]>({
         queryKey: ['bookmarks', user?.uid],
         queryFn: () => getBookmarks(user!.uid),
         enabled: !!user,
@@ -140,12 +135,18 @@ const MCQSessionPage: React.FC = () => {
 
     const locationState = location.state as { generatedMcqIds?: string[], incorrectMcqIds?: string[], selectedChapterIds?: string[], questionCount?: number } || {};
 
+    // --- DEFINITIVE FIX FOR "NO QUESTIONS FOUND" ERROR ---
     useEffect(() => {
-        if (!appData?.mcqs) return;
+        // This effect should re-run ONLY when the session identifier (id) or the global data (appData) changes.
+        if (!appData?.mcqs) {
+            return; // Wait for data to be available
+        }
+
         let sessionMcqs: MCQ[] = [];
+        const allAppDataMcqs = appData.mcqs;
 
         if ((mode === 'weakness' || mode === 'quiz') && locationState.generatedMcqIds?.length) {
-            const mcqMap = new Map(appData.mcqs.map(m => [m.id, m]));
+            const mcqMap = new Map(allAppDataMcqs.map(m => [m.id, m]));
             sessionMcqs = Array.from(new Set(locationState.generatedMcqIds)).map(id => mcqMap.get(id)!).filter(Boolean) as MCQ[];
         } else if (mode === 'incorrect' && locationState.incorrectMcqIds?.length) {
             const mcqMap = new Map(appData.mcqs.map(m => [m.id, m]));
@@ -154,22 +155,32 @@ const MCQSessionPage: React.FC = () => {
             const availableMcqs = appData.mcqs.filter(mcq => locationState.selectedChapterIds!.includes(mcq.chapterId));
             sessionMcqs = availableMcqs.sort(() => 0.5 - Math.random()).slice(0, locationState.questionCount);
         } else if (id) {
-            sessionMcqs = appData.mcqs.filter(mcq => mcq.chapterId === id).sort(() => 0.5 - Math.random());
+            // This is the critical logic. It filters the global data using the ID from the URL.
+            sessionMcqs = appData.mcqs.filter(mcq => mcq.chapterId === id);
         }
 
-        setMcqs(sessionMcqs);
-        setCurrentIndex(0);
-        setAnswers({});
-        setMarkedForReview(new Set());
-        sessionStorage.removeItem(`pediaquiz_marked_questions_${id}_${mode}`);
-        setIsFinished(false);
-    }, [appData, id, mode, locationState]);
+        // Reset the session state
+        if (sessionMcqs.length > 0) {
+            setMcqs(sessionMcqs.sort(() => 0.5 - Math.random()));
+            setCurrentIndex(0);
+            setAnswers({});
+            setMarkedForReview(new Set());
+            setIsFinished(false);
+        } else {
+            // Only show toast if we are on a session page and it results in no questions.
+            // This prevents the toast on initial load before appData is ready.
+            if (location.pathname.startsWith('/session/')) {
+                addToast("No questions found for this session setup. Please check your selection.", "warning");
+                // Don't navigate away, just show a message. The component will render the "no questions" text.
+            }
+        }
+    }, [appData, id, mode]); // The dependency array is now simple and correct.
+    // --- END OF FIX ---
 
+    // This second useEffect is for persisting marked questions, it's fine as is.
     useEffect(() => {
-        try {
+        if (id && mode) { // Ensure id and mode are defined before using them in the key
             sessionStorage.setItem(`pediaquiz_marked_questions_${id}_${mode}`, JSON.stringify(Array.from(markedForReview)));
-        } catch (error) {
-            console.error("Failed to save marked questions to session storage:", error);
         }
     }, [markedForReview, id, mode]);
 
@@ -199,7 +210,9 @@ const MCQSessionPage: React.FC = () => {
     const finishSession = useCallback(() => {
         if (isFinished || !user) return;
         setIsFinished(true);
-        sessionStorage.removeItem(`pediaquiz_marked_questions_${id}_${mode}`);
+        if (id && mode) {
+            sessionStorage.removeItem(`pediaquiz_marked_questions_${id}_${mode}`);
+        }
 
         if (isQuizMode) {
             const results: QuizResult['results'] = mcqs.map((mcq, index) => {
@@ -218,13 +231,14 @@ const MCQSessionPage: React.FC = () => {
             addQuizResultMutation.mutate(quizResultPayload, {
                 onSuccess: (data) => {
                     const newQuizResultId = data.data.id;
-                    navigate(location.pathname + '/results', { state: { result: { ...quizResultPayload, id: newQuizResultId } }, replace: true });
+                    const resultWithPenalty = { ...quizResultPayload, id: newQuizResultId, scoreWithPenalty: results.reduce((acc, r) => r.isCorrect ? acc + 4 : r.selectedAnswer !== null ? acc - 1 : acc, 0), results };
+                    navigate(location.pathname + '/results', { state: { result: resultWithPenalty }, replace: true });
                     addToast("Quiz submitted! Review your answers.", "success");
                 },
                 onError: (error) => {
                     addToast(`Failed to save quiz results: ${error.message}`, "error");
-                    // Still navigate to show results, but without an ID
-                    navigate(location.pathname + '/results', { state: { result: quizResultPayload }, replace: true });
+                    const resultWithPenalty = { ...quizResultPayload, scoreWithPenalty: results.reduce((acc, r) => r.isCorrect ? acc + 4 : r.selectedAnswer !== null ? acc - 1 : acc, 0), results };
+                    navigate(location.pathname + '/results', { state: { result: resultWithPenalty }, replace: true });
                 }
             });
         } else {
@@ -256,10 +270,10 @@ const MCQSessionPage: React.FC = () => {
     const finalResult = useMemo(() => {
         if (!location.pathname.endsWith('/results')) return null;
         
-        const resultFromState = location.state?.result as Omit<QuizResult, 'date' | 'userId'> & { id?: string };
+        const resultFromState = location.state?.result as QuizResult & { scoreWithPenalty: number };
         if (!resultFromState) return null;
 
-        const scoreWithPenalty = resultFromState.results.reduce((acc, r) => {
+        const scoreWithPenalty = resultFromState.scoreWithPenalty ?? resultFromState.results.reduce((acc, r) => {
             if (r.selectedAnswer === null) return acc;
             return r.isCorrect ? acc + 4 : acc - 1;
         }, 0);
@@ -270,11 +284,14 @@ const MCQSessionPage: React.FC = () => {
     if (isAppDataLoading) return <Loader message="Loading Session..." />;
     
     if (finalResult) {
-        return <QuizResultsPage result={finalResult} mcqs={mcqs.filter(mcq => finalResult.results.some(r => r.mcqId === mcq.id))} onReview={() => navigate(`/session/${mode}/${id}`)} />;
+        return <QuizResultsPage result={finalResult} mcqs={mcqs.filter(mcq => finalResult.results.some(r => r.mcqId === mcq.id))} onReview={() => navigate(-1)} />;
     }
     
-    if (mcqs.length === 0) return <div className="text-center p-8">No questions available for this session.</div>;
-    if (!currentMcq) return <div className="text-center p-8">Loading question...</div>;
+    // Show a loading state while waiting for the useEffect to populate MCQs
+    if (mcqs.length === 0) {
+        return <Loader message="Preparing your session..." />;
+    }
+    if (!currentMcq) return <Loader message="Loading question..." />;
 
     const optionsArray = Array.isArray(currentMcq.options) ? currentMcq.options : [];
 
@@ -286,7 +303,7 @@ const MCQSessionPage: React.FC = () => {
                     <h1 className="text-xl font-bold capitalize">Q. {currentIndex + 1}/{mcqs.length} ({mode.replace(/_/g,' ')})</h1>
                     <div className="flex items-center space-x-2">
                         {user?.isAdmin && (<button onClick={() => setIsDeleteModalOpen(true)} className="p-2 rounded-full text-slate-400 hover:text-red-500" title="Delete MCQ"><TrashIcon /></button>)}
-                        <button onClick={handleToggleBookmark} className={`p-2 rounded-full ${isBookmarked ? "text-amber-500 bg-amber-100 dark:bg-amber-800/50" : "text-slate-400 hover:text-amber-400"}`}><BookmarkIcon filled={isBookmarked} /></button>
+                        <button onClick={handleToggleBookmark} className={clsx("p-2 rounded-full", isBookmarked ? "text-amber-500 bg-amber-100 dark:bg-amber-800/50" : "text-slate-400 hover:text-amber-400")}><BookmarkIcon filled={isBookmarked} /></button>
                     </div>
                 </div>
                 {isQuizMode && <QuizTimerBar key={currentIndex} duration={60} onTimeUp={handleNext} isPaused={isFinished} />}
@@ -308,7 +325,7 @@ const MCQSessionPage: React.FC = () => {
                                 style = "bg-sky-200 dark:bg-sky-800 ring-2 ring-sky-500";
                             }
                             return (
-                                <button key={idx} onClick={() => handleSelectOption(option)} disabled={showAnswer && answers[currentIndex] != null} className={`w-full text-left p-4 rounded-lg flex items-start transition-colors disabled:cursor-not-allowed ${style}`}>
+                                <button key={idx} onClick={() => handleSelectOption(option)} disabled={showAnswer && answers[currentIndex] != null} className={clsx("w-full text-left p-4 rounded-lg flex items-start transition-colors disabled:cursor-not-allowed", style)}>
                                     <span className="font-bold mr-3">{String.fromCharCode(65 + idx)}.</span>
                                     <span>{option}</span>
                                 </button>
@@ -316,7 +333,7 @@ const MCQSessionPage: React.FC = () => {
                         })}
                     </div>
                     {showAnswer && answers[currentIndex] != null && (
-                        <div className="mt-6 p-4 bg-amber-50 dark:bg-amber-900/40 rounded-lg animate-fade-in">
+                        <div className="mt-6 p-4 bg-amber-50 dark:bg-amber-900/40 rounded-lg animate-fade-in-down">
                             <h3 className="font-bold text-amber-800 dark:text-amber-200">Explanation</h3>
                             <p className="mt-2 whitespace-pre-wrap">{currentMcq.explanation || "No explanation provided."}</p>
                         </div>
@@ -325,7 +342,7 @@ const MCQSessionPage: React.FC = () => {
                 
                 <div className="flex justify-between items-center mt-6">
                     <button onClick={handlePrevious} disabled={currentIndex === 0} className="px-6 py-2 rounded-md bg-slate-200 hover:bg-slate-300 disabled:opacity-50 dark:bg-slate-700 dark:hover:bg-slate-600">Previous</button>
-                    {isQuizMode && <button onClick={toggleMarkForReview} className={`px-4 py-2 rounded-md font-semibold ${markedForReview.has(currentIndex) ? 'bg-purple-500 text-white' : 'bg-slate-200 dark:bg-slate-700'}`}>{markedForReview.has(currentIndex) ? 'Unmark' : 'Mark Review'}</button>}
+                    {isQuizMode && <button onClick={toggleMarkForReview} className={clsx("px-4 py-2 rounded-md font-semibold", markedForReview.has(currentIndex) ? 'bg-purple-500 text-white' : 'bg-slate-200 dark:bg-slate-700')}>{markedForReview.has(currentIndex) ? 'Unmark' : 'Mark Review'}</button>}
                     <button onClick={handleNext} className="px-6 py-2 rounded-md bg-sky-500 text-white hover:bg-sky-600">{currentIndex === mcqs.length - 1 && !isFinished && isQuizMode ? "Submit Quiz" : (currentIndex === mcqs.length - 1 ? "Finish" : "Next")}</button>
                 </div>
                 

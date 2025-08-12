@@ -1,39 +1,43 @@
+// FILE: frontend/src/pages/StatsPage.tsx
+// MODIFIED: Fixed implicit any and missing types. Continues to use `useData()` for content.
+
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { HttpsCallableResult } from 'firebase/functions';
-import { useAuth } from '@/contexts/AuthContext';
-import { useData } from '@/contexts/DataContext';
+import { useAuth } from '@/contexts/AuthContext'; // user is now UserContextType
+import { useData } from '@/contexts/DataContext'; // IMPORTANT: Using useData for appData
 import { getAttemptedMCQs, getQuizResults } from '@/services/userDataService';
 import { generatePerformanceAdvice } from '@/services/aiService';
-import { AttemptedMCQs, MCQ, QuizResult } from '@pediaquiz/types';
+import { AttemptedMCQs, MCQ, QuizResult, Topic, Chapter } from '@pediaquiz/types'; // FIXED: Ensure types are imported
 import Loader from '@/components/Loader';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useToast } from '@/components/Toast';
+import clsx from 'clsx'; // For conditional styling
 
 const StatCard: React.FC<{ title: string; value: string | number; colorClass?: string; }> = ({ title, value, colorClass }) => (
     <div className="bg-slate-100 dark:bg-slate-800 p-4 rounded-lg">
         <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{title}</p>
-        <p className={`text-2xl font-bold mt-1 ${colorClass || 'text-slate-800 dark:text-slate-200'}`}>{value}</p>
+        <p className={clsx(`text-2xl font-bold mt-1`, colorClass || 'text-slate-800 dark:text-slate-200')}>{value}</p>
     </div>
 );
 
 const StatsPage: React.FC = () => {
-    const { user } = useAuth();
-    const { data: appData, isLoading: isAppDataLoading } = useData();
+    const { user } = useAuth(); // user is now UserContextType
+    const { data: appData, isLoading: isAppDataLoading } = useData(); // IMPORTANT: Using useData for appData
     const { addToast } = useToast();
     const [aiAdvice, setAiAdvice] = useState<string | null>(null);
-    const [selectedSource, setSelectedSource] = useState<'All' | 'Marrow' | 'Master'>('All'); // PediaQuiz removed
+    const [selectedSource, setSelectedSource] = useState<'All' | 'Marrow' | 'Master'>('All');
 
-    const { data: attemptedMCQs, isLoading: areAttemptsLoading } = useQuery<AttemptedMCQs>({
-        queryKey: ['attemptedMCQs', user?.uid],
-        queryFn: () => getAttemptedMCQs(user!.uid),
+    const { data: attemptedMCQs, isLoading: areAttemptsLoading } = useQuery<AttemptedMCQs>({ // Explicitly typed
+        queryKey: ['attemptedMCQs', user?.uid], // FIXED: uid is now on UserContextType
+        queryFn: () => getAttemptedMCQs(user!.uid), // FIXED: uid is now on UserContextType
         enabled: !!user,
         initialData: {},
     });
 
-    const { data: quizResults, isLoading: areQuizResultsLoading } = useQuery<QuizResult[]>({
-        queryKey: ['quizResults', user?.uid],
-        queryFn: () => getQuizResults(user!.uid),
+    const { data: quizResults, isLoading: areQuizResultsLoading } = useQuery<QuizResult[]>({ // Explicitly typed
+        queryKey: ['quizResults', user?.uid], // FIXED: uid is now on UserContextType
+        queryFn: () => getQuizResults(user!.uid), // FIXED: uid is now on UserContextType
         enabled: !!user,
         initialData: [],
     });
@@ -50,18 +54,18 @@ const StatsPage: React.FC = () => {
     const filteredMcqs = useMemo(() => {
         if (!appData?.mcqs) return [];
         if (selectedSource === 'All') return appData.mcqs;
-        if (selectedSource === 'Marrow') return appData.mcqs.filter(mcq => mcq.source === 'Marrow' || mcq.source === 'Marrow_AI_Generated');
-        if (selectedSource === 'Master') return appData.mcqs.filter(mcq => mcq.source === 'Master' || mcq.source === 'PediaQuiz'); // Group Master and PediaQuiz
+        if (selectedSource === 'Marrow') return appData.mcqs.filter((mcq: MCQ) => mcq.source === 'Marrow' || mcq.source === 'Marrow_AI_Generated'); // FIXED: Explicitly typed mcq
+        if (selectedSource === 'Master') return appData.mcqs.filter((mcq: MCQ) => mcq.source === 'Master' || mcq.source === 'PediaQuiz'); // FIXED: Explicitly typed mcq
         return appData.mcqs;
     }, [appData, selectedSource]);
 
     const overallStats = useMemo(() => {
-        if (!filteredMcqs.length || !attemptedMCQs) return { total: 0, attempted: 0, correct: 0, accuracy: 0 };
+        if (!appData?.topics || !filteredMcqs.length || !attemptedMCQs) return { total: 0, attempted: 0, correct: 0, accuracy: 0 };
 
         const attemptedIds = Object.keys(attemptedMCQs);
-        const relevantAttemptedMcqIds = filteredMcqs.filter(mcq => attemptedIds.includes(mcq.id)).map(mcq => mcq.id);
+        const relevantAttemptedMcqIds = filteredMcqs.filter((mcq: MCQ) => attemptedIds.includes(mcq.id)).map((mcq: MCQ) => mcq.id); // FIXED: Explicitly typed mcq
 
-        const correctCount = relevantAttemptedMcqIds.filter(id => attemptedMCQs[id].isCorrect).length;
+        const correctCount = relevantAttemptedMcqIds.filter((id: string) => attemptedMCQs[id].isCorrect).length; // FIXED: Explicitly typed id
         const accuracy = relevantAttemptedMcqIds.length > 0 ? (correctCount / relevantAttemptedMcqIds.length) * 100 : 0;
         
         return {
@@ -70,30 +74,26 @@ const StatsPage: React.FC = () => {
             correct: correctCount,
             accuracy,
         };
-    }, [filteredMcqs, attemptedMCQs]);
+    }, [appData, filteredMcqs, attemptedMCQs]);
 
     const topicPerformance = useMemo(() => {
-        if (!appData?.mcqs || !attemptedMCQs || !filteredMcqs.length) return [];
+        if (!appData?.mcqs || !appData?.topics || !attemptedMCQs || !filteredMcqs.length) return [];
         
         const performanceMap: Record<string, { correct: number, total: number }> = {};
 
-        const relevantAttemptedMCQs = Object.fromEntries(
-            Object.entries(attemptedMCQs).filter(([mcqId]) => 
-                filteredMcqs.some(fm => fm.id === mcqId)
-            )
-        );
+        // Changed this to iterate over attemptedMCQs and then find corresponding MCQ in filteredMcqs
+        const relevantAttemptedMCQObjects = filteredMcqs.filter((mcq: MCQ) => attemptedMCQs[mcq.id]); // FIXED: Explicitly typed mcq
 
-        for (const mcqId in relevantAttemptedMCQs) {
-            const attempt = relevantAttemptedMCQs[mcqId];
-            const mcq = appData.mcqs.find(m => m.id === mcqId);
-            if (mcq) {
-                if (!performanceMap[mcq.topic]) {
-                    performanceMap[mcq.topic] = { correct: 0, total: 0 };
-                }
-                performanceMap[mcq.topic].total++;
-                if (attempt.isCorrect) {
-                    performanceMap[mcq.topic].correct++;
-                }
+        for (const mcq of relevantAttemptedMCQObjects) {
+            const attempt = attemptedMCQs[mcq.id];
+            const topicName = mcq.topic; 
+            
+            if (!performanceMap[topicName]) {
+                performanceMap[topicName] = { correct: 0, total: 0 };
+            }
+            performanceMap[topicName].total++;
+            if (attempt.isCorrect) {
+                performanceMap[topicName].correct++;
             }
         }
         
@@ -140,11 +140,11 @@ const StatsPage: React.FC = () => {
                     <button
                         key={source}
                         onClick={() => setSelectedSource(source as 'All' | 'Marrow' | 'Master')}
-                        className={`px-4 py-2 rounded-md font-semibold text-sm transition-colors ${
+                        className={clsx(`px-4 py-2 rounded-md font-semibold text-sm transition-colors`,
                             selectedSource === source
                                 ? 'bg-sky-500 text-white'
                                 : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600'
-                        }`}
+                        )}
                     >
                         {source}
                     </button>
@@ -251,7 +251,7 @@ const StatsPage: React.FC = () => {
                                     {((quiz.score / quiz.totalQuestions) * 100).toFixed(0)}%
                                 </p>
                                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                                    {quiz.score} / {quiz.totalQuestions} correct | Score: {quiz.results.reduce((acc, r) => r.isCorrect ? acc + 4 : r.selectedAnswer !== null ? acc - 1 : acc, 0)}
+                                    {quiz.score} / {quiz.totalQuestions} correct | Score: {quiz.results.reduce((acc: number, r: QuizResult['results'][0]) => r.isCorrect ? acc + 4 : r.selectedAnswer !== null ? acc - 1 : acc, 0)}
                                 </p>
                             </div>
                         ))}

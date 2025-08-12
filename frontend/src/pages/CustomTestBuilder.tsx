@@ -1,13 +1,15 @@
-// frontend/src/pages/CustomTestBuilder.tsx
+// FILE: frontend/src/pages/CustomTestBuilder.tsx
+
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useData } from '@/contexts/DataContext';
+import { useData } from '@/contexts/DataContext'; // IMPORTANT: Using useData
 import { ChevronDownIcon } from '@/components/Icons';
 import Loader from '@/components/Loader';
-import type { Chapter, Topic, MCQ } from '@pediaquiz/types';
+import type { Chapter, Topic, MCQ } from '@pediaquiz/types'; // FIXED: Ensure types are imported
+import clsx from 'clsx'; // For conditional styling
 
 const CustomTestBuilder: React.FC = () => {
-  const { data: appData, isLoading, error } = useData();
+  const { data: appData, isLoading, error } = useData(); // IMPORTANT: Using useData
   const navigate = useNavigate();
 
   const [selectedChapters, setSelectedChapters] = useState<Set<string>>(new Set());
@@ -18,7 +20,7 @@ const CustomTestBuilder: React.FC = () => {
   const allMcqs = appData?.mcqs || [];
 
   const selectedMcqCount = useMemo(() => {
-    return allMcqs.filter((mcq: MCQ) => selectedChapters.has(mcq.chapterId)).length;
+    return allMcqs.filter((mcq: MCQ) => selectedChapters.has(mcq.chapterId)).length; // Explicitly typed mcq
   }, [selectedChapters, allMcqs]);
 
   const handleChapterToggle = (chapterId: string) => {
@@ -30,7 +32,7 @@ const CustomTestBuilder: React.FC = () => {
   };
 
   const handleTopicToggle = (chaptersInTopic: Chapter[]) => {
-    const chapterIds = chaptersInTopic.map(c => c.id);
+    const chapterIds = chaptersInTopic.map((c: Chapter) => c.id); // FIXED: Explicitly typed c
     const allSelected = chaptersInTopic.length > 0 && chapterIds.every(id => selectedChapters.has(id));
     
     setSelectedChapters(prev => {
@@ -58,7 +60,7 @@ const CustomTestBuilder: React.FC = () => {
         alert("Please select at least one chapter.");
         return;
     }
-    const availableQuestions = allMcqs.filter((mcq: MCQ) => chapterIds.includes(mcq.chapterId));
+    const availableQuestions = allMcqs.filter((mcq: MCQ) => chapterIds.includes(mcq.chapterId)); // Explicitly typed mcq
     if (availableQuestions.length < totalQuestions) {
         alert(`You requested ${totalQuestions} questions, but only ${availableQuestions.length} are available. Please reduce the question count or select more chapters.`);
         return;
@@ -82,7 +84,7 @@ const CustomTestBuilder: React.FC = () => {
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Custom Test Builder</h1>
 
-      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md space-y-4">
+      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md">
         <h2 className="text-xl font-bold">1. Configure Test</h2>
         <div>
           <label htmlFor="numQuestions" className="block text-sm font-medium mb-1">
@@ -94,7 +96,7 @@ const CustomTestBuilder: React.FC = () => {
             min={1}
             max={selectedMcqCount > 0 ? selectedMcqCount : 1}
             value={totalQuestions}
-            onChange={(e) => setTotalQuestions(Math.max(1, Math.min(selectedMcqCount, parseInt(e.target.value) || 0)))}
+            onChange={(e) => setTotalQuestions(Math.max(1, Math.min(selectedMcqCount, parseInt(e.target.value, 10) || 0)))} // Added parseInt base
             className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md dark:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-sky-500"
             disabled={selectedMcqCount === 0}
           />
@@ -111,11 +113,11 @@ const CustomTestBuilder: React.FC = () => {
       <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md">
         <h2 className="text-xl font-bold mb-4">2. Select Content</h2>
         <div className="space-y-3">
-          {topics.map((topic: Topic) => {
+          {topics.map((topic: Topic) => { // Explicitly typed topic
             const isTopicExpanded = expandedTopics.has(topic.id);
             const chaptersInTopic = topic.chapters;
-            const allInTopicSelected = chaptersInTopic.length > 0 && chaptersInTopic.every(c => selectedChapters.has(c.id));
-            const selectedInTopicCount = chaptersInTopic.filter(c => selectedChapters.has(c.id)).length;
+            const allInTopicSelected = chaptersInTopic.length > 0 && chaptersInTopic.every((c: Chapter) => selectedChapters.has(c.id)); // Explicitly typed c
+            const selectedInTopicCount = chaptersInTopic.filter((c: Chapter) => selectedChapters.has(c.id)).length; // Explicitly typed c
             const isIndeterminate = selectedInTopicCount > 0 && selectedInTopicCount < chaptersInTopic.length;
 
             return (
@@ -133,13 +135,13 @@ const CustomTestBuilder: React.FC = () => {
                     <label htmlFor={`topic-${topic.id}`} className="font-medium cursor-pointer select-none">{topic.name}</label>
                   </div>
                   <button onClick={() => toggleTopicExpand(topic.id)} className="p-1">
-                    <ChevronDownIcon className={`transition-transform duration-200 ${isTopicExpanded ? 'rotate-180' : ''}`} />
+                    <ChevronDownIcon className={clsx(`transition-transform duration-200`, isTopicExpanded ? 'rotate-180' : '')} />
                   </button>
                 </div>
                 {isTopicExpanded && (
                   <div className="p-4 border-t border-slate-200 dark:border-slate-700">
                     <ul className="space-y-2">
-                      {chaptersInTopic.map((chapter: Chapter) => (
+                      {chaptersInTopic.map((chapter: Chapter) => ( // Explicitly typed chapter
                         <li key={chapter.id}>
                           <label className="flex items-center gap-2 cursor-pointer">
                             <input

@@ -7,10 +7,9 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     
-    // Both 'module' and 'moduleResolution' MUST be 'Node16' for consistency
-    // with modern module resolution and CommonJS output.
-    "module": "Node16",
-    "moduleResolution": "Node16"
+    "module": "NodeNext", // UPDATED for modern Node.js module resolution
+    "moduleResolution": "NodeNext", // UPDATED for modern Node.js module resolution
+    "types": ["node"] // NEW: Ensures Node.js global types are recognized
   },
   "compileOnSave": true,
   "include": [

@@ -1,12 +1,15 @@
+// FILE: frontend/src/pages/GeneratorPage.tsx
+
 import React, { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/Toast';
 import { storage } from '@/firebase';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import clsx from 'clsx'; // NEW IMPORT for conditional styling
 
 const GeneratorPage: React.FC = () => {
-  const { user } = useAuth();
+  const { user } = useAuth(); // user is now UserContextType
   const { addToast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -14,8 +17,8 @@ const GeneratorPage: React.FC = () => {
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file || !user) {
-      addToast('Please select a file and ensure you are logged in.', 'error');
+    if (!file || !user) { // user.uid implicitly checked by useAuth() context
+      addToast('Please select a file and ensure you are logged in.', 'info');
       return;
     }
 
@@ -23,7 +26,7 @@ const GeneratorPage: React.FC = () => {
     setUploadProgress(0);
     addToast(`Uploading "${file.name}"...`, "info");
 
-    const storageRef = ref(storage, `uploads/${user.uid}/${Date.now()}_${file.name}`);
+    const storageRef = ref(storage, `uploads/${user.uid}/${Date.now()}_${file.name}`); // user.uid is on UserContextType
     const uploadTask = uploadBytesResumable(storageRef, file);
 
     uploadTask.on('state_changed',
@@ -63,18 +66,22 @@ const GeneratorPage: React.FC = () => {
         for AI content generation and approval.
       </p>
 
-      <div className="bg-white dark:bg-slate-800 p-6 rounded-xl shadow-md">
+      {/* --- UPDATED CLASSES: using card-base utility class --- */}
+      <div className="card-base">
         <h2 className="text-xl font-bold mb-4">Upload File</h2>
         <input
           type="file"
           ref={fileInputRef}
           onChange={handleFileChange}
           accept="application/pdf,text/plain"
-          className="block w-full text-sm text-slate-500
-            file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0
-            file:text-sm file:font-semibold file:bg-sky-50 file:text-sky-700
-            hover:file:bg-sky-100 dark:file:bg-sky-900/50 dark:file:text-sky-300 dark:hover:file:bg-sky-900
-            disabled:opacity-50"
+          // --- UPDATED CLASSES: using clsx for conditional styles ---
+          className={clsx(
+            "block w-full text-sm text-slate-500",
+            "file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0",
+            "file:text-sm file:font-semibold file:bg-sky-50 file:text-sky-700",
+            "hover:file:bg-sky-100 dark:file:bg-sky-900/50 dark:file:text-sky-300 dark:hover:file:bg-sky-900",
+            "disabled:opacity-50"
+          )}
           disabled={isUploading || !user}
         />
         {isUploading && (

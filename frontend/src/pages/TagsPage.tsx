@@ -1,20 +1,24 @@
+// FILE: frontend/src/pages/TagsPage.tsx
+// MODIFIED: Fixed implicit any. Continues to use `useData()` for content.
+
 import React, { useState, useMemo } from 'react';
-import { useData } from '@/contexts/DataContext';
+import { useData } from '@/contexts/DataContext'; // IMPORTANT: Using useData
 import Loader from '@/components/Loader';
 import { Link } from 'react-router-dom';
+import clsx from 'clsx'; // For conditional styling
 
 const TagsPage: React.FC = () => {
-    const { data: appData, isLoading, error } = useData();
+    const { data: appData, isLoading, error } = useData(); // IMPORTANT: Using useData
     const [searchTerm, setSearchTerm] = useState('');
 
-    const allTags = useMemo(() => appData?.keyClinicalTopics || [], [appData]);
+    const allTags = useMemo(() => appData?.keyClinicalTopics || [], [appData]); // DEPENDS ON appData
 
     const filteredTags = useMemo(() => {
         if (!searchTerm.trim()) {
             return allTags;
         }
         const lowerCaseSearch = searchTerm.toLowerCase();
-        return allTags.filter(tag => tag.toLowerCase().includes(lowerCaseSearch));
+        return allTags.filter((tag: string) => tag.toLowerCase().includes(lowerCaseSearch)); // FIXED: Explicitly typed tag
     }, [allTags, searchTerm]);
 
     if (isLoading) return <Loader message="Loading tags..." />;
@@ -40,12 +44,12 @@ const TagsPage: React.FC = () => {
             {filteredTags.length === 0 ? (
                 <div className="text-center py-8 bg-white dark:bg-slate-800 rounded-lg shadow-md">
                     <p className="text-slate-500">
-                        {allTags.length > 0 ? "No tags found matching your search." : "No tags found yet. Tags are generated when new content is approved."}
+                        {allTags?.length > 0 ? "No tags found matching your search." : "No tags found yet. Tags are generated when new content is approved."}
                     </p>
                 </div>
             ) : (
                 <div className="flex flex-wrap gap-3">
-                    {filteredTags.map(tag => (
+                    {filteredTags.map((tag: string) => ( // FIXED: Explicitly typed tag
                         <Link
                             key={tag}
                             to={`/tags/${encodeURIComponent(tag.replace(/\s+/g, '_').toLowerCase())}`}

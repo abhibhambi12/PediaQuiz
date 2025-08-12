@@ -1,7 +1,7 @@
 {
   "name": "functions",
   "scripts": {
-    "build": "npx tsc --build",
+    "build": "tsc --build",
     "lint": "eslint --ext .js,.ts .",
     "serve": "npm run build && firebase emulators:start --only functions",
     "deploy": "firebase deploy --only functions",
@@ -16,7 +16,8 @@
     "@google-cloud/vision": "^4.3.0",
     "firebase-admin": "^12.2.0",
     "firebase-functions": "^5.0.1",
-    "@pediaquiz/types": "file:../packages/types/pediaquiz-types-1.0.0.tgz"
+    "@pediaquiz/types": "workspace:^",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "typescript": "^5.4.5"

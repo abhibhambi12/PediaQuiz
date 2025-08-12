@@ -1,11 +1,25 @@
+// FILE: frontend/src/contexts/AuthContext.tsx
+
 import React, { createContext, useState, useEffect, useContext, ReactNode, useCallback } from 'react';
 import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
-import { doc, getDoc, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 import { auth, db } from '@/firebase';
-import type { User } from '@pediaquiz/types';
+import type { User as PediaquizUserType } from '@pediaquiz/types';
+
+interface UserContextType extends PediaquizUserType {
+    uid: string;
+    email: string | null;
+    displayName: string | null;
+    isAdmin: boolean;
+    createdAt: Date;
+    lastLogin: Date;
+    bookmarks?: string[];
+    currentStreak: number;
+    lastStudiedDate?: Date;
+}
 
 interface AuthContextType {
-    user: User | null;
+    user: UserContextType | null;
     loading: boolean;
     logout: () => Promise<void>;
 }
@@ -13,17 +27,15 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-    const [user, setUser] = useState<User | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [user, setUser] = useState<UserContextType | null>(null);
+    // --- FIXED: Call setLoading as a function ---
+    const [loading, setLoading] = useState(true); 
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
             if (firebaseUser) {
                 try {
-                    // --- FIX: Force a refresh of the ID token ---
-                    // This is CRITICAL after custom claims have been changed on the backend.
-                    // It ensures the frontend gets the latest claims (like isAdmin).
-                    const idTokenResult = await firebaseUser.getIdTokenResult(true); // true forces a refresh
+                    const idTokenResult = await firebaseUser.getIdTokenResult(true); 
 
                     const userDocRef = doc(db, 'users', firebaseUser.uid);
                     const userDocSnap = await getDoc(userDocRef);
@@ -34,23 +46,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                             uid: firebaseUser.uid,
                             email: firebaseUser.email,
                             displayName: firebaseUser.displayName,
-                            // Use the refreshed token's claims as the source of truth for isAdmin
                             isAdmin: idTokenResult.claims.isAdmin === true,
                             createdAt: userData.createdAt?.toDate() || new Date(),
-                            lastLogin: new Date(), // Set to now
+                            lastLogin: new Date(),
+                            currentStreak: userData.currentStreak || 0,
+                            lastStudiedDate: userData.lastStudiedDate?.toDate(),
                         });
-                        // Update last login silently
                         await updateDoc(userDocRef, { lastLogin: serverTimestamp() });
                     } else {
-                        // Create user profile if it doesn't exist
-                        const newUser: User = {
+                        const newUser: UserContextType = {
                             uid: firebaseUser.uid,
                             email: firebaseUser.email,
                             displayName: firebaseUser.displayName,
-                            // Use the refreshed token's claims here too
                             isAdmin: idTokenResult.claims.isAdmin === true,
                             createdAt: new Date(),
                             lastLogin: new Date(),
+                            currentStreak: 0,
+                            lastStudiedDate: undefined,
                         };
                         await setDoc(userDocRef, {
                             ...newUser,
@@ -76,7 +88,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         try {
             await signOut(auth);
             setUser(null);
-        } catch (error) {
+        } catch (error: any) { 
             console.error("Error signing out:", error);
         }
     }, []);

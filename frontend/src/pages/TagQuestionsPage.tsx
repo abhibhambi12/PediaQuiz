@@ -1,13 +1,16 @@
+// FILE: frontend/src/pages/TagQuestionsPage.tsx
+// MODIFIED: Fixed implicit any and missing types. Continues to use `useData()` for content.
+
 import React, { useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useData } from '@/contexts/DataContext';
+import { useData } from '@/contexts/DataContext'; // IMPORTANT: Using useData
 import Loader from '@/components/Loader';
 import SearchResultItem from '@/components/SearchResultItem';
-import { MCQ } from '@pediaquiz/types'; // MCQ is used here
+import { MCQ } from '@pediaquiz/types'; // FIXED: Ensure MCQ type is imported
 
 const TagQuestionsPage: React.FC = () => {
     const { tagName } = useParams<{ tagName: string }>();
-    const { data: appData, isLoading, error } = useData();
+    const { data: appData, isLoading, error } = useData(); // IMPORTANT: Using useData
 
     const decodedTagName = useMemo(() => {
         if (tagName) {
@@ -18,12 +21,13 @@ const TagQuestionsPage: React.FC = () => {
 
     const filteredMcqs = useMemo(() => {
         if (!appData?.mcqs || !decodedTagName) return [];
-        return appData.mcqs.filter(mcq => 
-            mcq.tags && mcq.tags.some(tag => tag.toLowerCase() === decodedTagName.toLowerCase())
+        return appData.mcqs.filter((mcq: MCQ) => // FIXED: Explicitly typed mcq
+            mcq.tags && mcq.tags.some((tag: string) => tag.toLowerCase() === decodedTagName.toLowerCase()) // FIXED: Explicitly typed tag
         );
     }, [appData, decodedTagName]);
 
     if (isLoading) return <Loader message={`Loading questions for "${decodedTagName}"...`} />;
+
     if (error) return <div className="text-center py-10 text-red-500">Error: {error.message}</div>;
 
     return (
@@ -40,7 +44,7 @@ const TagQuestionsPage: React.FC = () => {
                 </div>
             ) : (
                 <div className="space-y-4">
-                    {filteredMcqs.map(item => (
+                    {filteredMcqs.map((item: MCQ) => ( // FIXED: Explicitly typed item
                         <SearchResultItem key={item.id} item={item} />
                     ))}
                 </div>

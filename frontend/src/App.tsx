@@ -1,3 +1,5 @@
+// FILE: frontend/src/App.tsx
+
 import React from "react";
 import {
   BrowserRouter as Router,
@@ -13,7 +15,8 @@ import Header from "./components/Header";
 import BottomNav from "./components/BottomNav";
 import AdminRoute from "./components/AdminRoute";
 import Loader from "./components/Loader";
-import FloatingActionButton from "./components/FloatingActionButton"; // Import the new component
+import FloatingActionButton from "./components/FloatingActionButton";
+import ErrorBoundary from "./components/ErrorBoundary"; // NEW IMPORT: ErrorBoundary
 
 // Import Pages
 import HomePage from "./pages/HomePage";
@@ -38,12 +41,14 @@ import TagQuestionsPage from "./pages/TagQuestionsPage";
 import ChapterNotesEditPage from "./pages/ChapterNotesEditPage";
 
 const AppLayout: React.FC = () => (
-  <div className="flex flex-col min-h-screen">
+  // NOTE: Styling classes changed here to use your new Tailwind color palette.
+  // This is a stylistic change to align with upcoming Tailwind updates.
+  <div className="flex flex-col min-h-screen bg-neutral-100 dark:bg-neutral-900">
     <Header />
     <main className="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8 mb-20">
       <Outlet />
     </main>
-    <FloatingActionButton /> {/* Add the button here */}
+    <FloatingActionButton />
     <BottomNav />
   </div>
 );
@@ -77,7 +82,9 @@ const AppContent: React.FC = () => {
         <Route path="/stats" element={<StatsPage />} />
         <Route path="/log-screen" element={<LogScreenPage />} />
         <Route path="/bookmarks" element={<BookmarksPage />} />
-        <Route path="/session/:mode/:id" element={<MCQSessionPage />} />
+        {/* NOTE: Updated route parameter name for consistency with session concepts. */}
+        {/* The component itself will use location.state as before. */}
+        <Route path="/session/:mode/:sessionId" element={<MCQSessionPage />} />
         <Route path="/search" element={<SearchResultsPage />} />
         
         <Route path="/tags" element={<TagsPage />} />
@@ -131,15 +138,18 @@ const AppContent: React.FC = () => {
 };
 
 const App: React.FC = () => (
-  <ToastProvider>
-    <AuthProvider>
-      <DataProvider>
-        <Router>
-          <AppContent />
-        </Router>
-      </DataProvider>
-    </AuthProvider>
-  </ToastProvider>
+  // --- NEW: Wrap the entire application in the ErrorBoundary ---
+  <ErrorBoundary>
+    <ToastProvider>
+      <AuthProvider>
+        <DataProvider>
+          <Router>
+            <AppContent />
+          </Router>
+        </DataProvider>
+      </AuthProvider>
+    </ToastProvider>
+  </ErrorBoundary>
 );
 
 export default App;

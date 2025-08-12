@@ -20,5 +20,9 @@
   "references": [
     { "path": "./tsconfig.node.json" },
     { "path": "../packages/types" }
+  ],
+  "exclude": [
+    "node_modules",
+    "../functions"  // --- DEFINITIVE FIX: Exclude the functions directory ---
   ]
 }

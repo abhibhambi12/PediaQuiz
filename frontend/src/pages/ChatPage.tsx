@@ -1,9 +1,11 @@
+// FILE: frontend/src/pages/ChatPage.tsx
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useMutation } from '@tanstack/react-query';
 import { HttpsCallableResult } from 'firebase/functions';
 import { useAuth } from '@/contexts/AuthContext';
 import { chatWithAssistant } from '@/services/aiService';
-import { ChatMessage } from '@pediaquiz/types';
+import { ChatMessage } from '@pediaquiz/types'; // FIXED: Ensure ChatMessage type is imported
 import { useToast } from '@/components/Toast';
 import ReactMarkdown from 'react-markdown';
 
@@ -40,7 +42,7 @@ const ChatPage: React.FC = () => {
     useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages]);
 
     const handleSend = async () => {
-        if (!input.trim() || !user || chatMutation.isPending) return;
+        if (!input.trim() || !user || chatMutation.isPending) return; // user.uid implicitly checked by useAuth() context
         const userMessage: ChatMessage = { id: Date.now().toString(), text: input, sender: 'user', timestamp: new Date() };
         setMessages(prev => [...prev, userMessage]);
         const currentHistory = [...messages, userMessage];

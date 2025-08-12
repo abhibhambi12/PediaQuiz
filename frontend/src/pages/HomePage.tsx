@@ -1,20 +1,22 @@
-// frontend/src/pages/HomePage.tsx
+// FILE: frontend/src/pages/HomePage.tsx
+
 import React, { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { HttpsCallableResult } from 'firebase/functions';
-import { useAuth } from '@/contexts/AuthContext';
-import { useData } from '@/contexts/DataContext';
+import { useAuth } from '@/contexts/AuthContext'; // user is now UserContextType
+import { useData } from '@/contexts/DataContext'; // IMPORTANT: Using useData
 import { getAttemptedMCQs } from '@/services/userDataService';
 import { generateWeaknessBasedTest, getDailyWarmupQuiz, getExpandedSearchTerms } from '@/services/aiService';
 import { ChevronDownIcon, ChevronRightIcon, BookIcon, BrainIcon } from '@/components/Icons';
 import Loader from '@/components/Loader';
 import { useToast } from '@/components/Toast';
-import type { Chapter, Topic, AttemptedMCQs, MCQ } from '@pediaquiz/types';
+import type { Chapter, Topic, AttemptedMCQs, MCQ } from '@pediaquiz/types'; // FIXED: Ensure types are imported
+import clsx from 'clsx'; // For conditional styling
 
 const HomePage: React.FC = () => {
-    const { user } = useAuth();
-    const { data: appData, isLoading, error } = useData();
+    const { user } = useAuth(); // user is now UserContextType
+    const { data: appData, isLoading, error } = useData(); // IMPORTANT: Using useData
     const { addToast } = useToast();
     const navigate = useNavigate();
     
@@ -22,12 +24,12 @@ const HomePage: React.FC = () => {
     const [isSearching, setIsSearching] = useState(false);
 
     const generalTopics = useMemo(() => { 
-        return appData?.topics.filter(topic => topic.source === 'General') || [];
+        return appData?.topics.filter((topic: Topic) => topic.source === 'General') || []; // FIXED: Explicitly typed topic
     }, [appData]);
 
-    const { data: attemptedMCQs, isLoading: areAttemptsLoading } = useQuery<AttemptedMCQs>({
-        queryKey: ['attemptedMCQs', user?.uid],
-        queryFn: () => getAttemptedMCQs(user!.uid),
+    const { data: attemptedMCQs, isLoading: areAttemptsLoading } = useQuery<AttemptedMCQs>({ // Explicitly typed
+        queryKey: ['attemptedMCQs', user?.uid], // FIXED: uid is now on UserContextType
+        queryFn: () => getAttemptedMCQs(user!.uid), // FIXED: uid is now on UserContextType
         enabled: !!user,
         initialData: {},
     });
@@ -61,7 +63,7 @@ const HomePage: React.FC = () => {
     });
 
     const handleGenerateAiTest = () => {
-        if (!user || !appData?.mcqs || !attemptedMCQs) {
+        if (!user || !appData?.mcqs || !attemptedMCQs) { // user is UserContextType
             addToast("Please log in to generate AI tests.", "info");
             return;
         }
@@ -74,8 +76,8 @@ const HomePage: React.FC = () => {
 
         // Optimization: Only send incorrectly answered MCQs to the AI
         const incorrectMcqs = appData.mcqs
-            .filter(mcq => incorrectMcqIds.includes(mcq.id))
-            .map(mcq => ({
+            .filter((mcq: MCQ) => incorrectMcqIds.includes(mcq.id)) // FIXED: Explicitly typed mcq
+            .map((mcq: MCQ) => ({ // FIXED: Explicitly typed mcq
                 id: mcq.id,
                 topicId: mcq.topicId,
                 chapterId: mcq.chapterId,
@@ -85,7 +87,7 @@ const HomePage: React.FC = () => {
 
         generateWeaknessTestMutation.mutate({
             attempted: attemptedMCQs,
-            allMcqs: incorrectMcqs, // Send only the smaller, targeted list
+            allMcqs: incorrectMcqs, 
             testSize: 20
         });
     };
@@ -124,7 +126,10 @@ const HomePage: React.FC = () => {
     if (error) return <div className="text-center py-4 text-red-500">{error.message}</div>;
     if (!appData) return <div className="text-center py-10">No app data found.</div>;
     
-    const canGenerateAiTest = user && Object.keys(attemptedMCQs || {}).filter(id => !attemptedMCQs[id].isCorrect).length >= 5;
+    const canGenerateAiTest = user && appData?.mcqs && Object.keys(attemptedMCQs || {}).filter(id => {
+        const mcq = appData.mcqs.find((m: MCQ) => m.id === id); // FIXED: Explicitly typed m
+        return mcq?.source === 'Marrow' && !attemptedMCQs[id].isCorrect;
+    }).length >= 5;
 
     return (
         <div className="space-y-6">
@@ -152,7 +157,7 @@ const HomePage: React.FC = () => {
                 <button
                     onClick={() => dailyWarmupMutation.mutate()}
                     disabled={dailyWarmupMutation.isPending}
-                    className="flex items-center justify-center gap-3 w-full text-center p-4 rounded-xl shadow-md bg-amber-500 hover:bg-amber-600 text-white font-bold text-lg transition-colors disabled:opacity-50"
+                    className="px-4 py-4 rounded-xl shadow-md bg-amber-500 hover:bg-amber-600 text-white font-bold text-lg transition-colors disabled:opacity-50"
                 >
                    {dailyWarmupMutation.isPending ? "Building..." : "☀️ Daily Warm-up"}
                 </button>
@@ -178,7 +183,7 @@ const HomePage: React.FC = () => {
             </div>
 
             <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200 pt-4">Browse General Topics</h2>
-            {generalTopics.map((topic: Topic) => {
+            {generalTopics.map((topic: Topic) => { // Explicitly typed topic
                 const isExpanded = expandedTopics.has(topic.id);
                 return (
                     <div key={topic.id} className="bg-white dark:bg-slate-800 rounded-xl shadow-sm overflow-hidden transition-all">
@@ -198,16 +203,16 @@ const HomePage: React.FC = () => {
                                         <BookIcon />
                                     </Link>
                                 )}
-                                <ChevronDownIcon className={`transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`} />
+                                <ChevronDownIcon className={clsx(`transition-transform duration-300`, isExpanded ? 'rotate-180' : '')} />
                             </div>
                         </div>
                         {isExpanded && (
                             <div className="p-4 border-t border-slate-200 dark:border-slate-700">
                                 <ul className="space-y-2">
-                                    {topic.chapters.map((chapter: Chapter) => {
-                                        const chapterMcqs = appData.mcqs.filter(mcq => mcq.chapterId === chapter.id);
-                                        const attemptedInChapter = chapterMcqs.filter(mcq => attemptedMCQs && attemptedMCQs[mcq.id]).length;
-                                        const progress = chapter.mcqCount > 0 ? (attemptedInChapter / chapter.mcqCount) * 100 : 0;
+                                    {topic.chapters.map((chapter: Chapter) => { // Explicitly typed chapter
+                                        const chapterMcqs = appData?.mcqs.filter((mcq: MCQ) => mcq.chapterId === chapter.id) || []; // FIXED: Explicitly typed mcq
+                                        const attemptedInChapter = chapterMcqs.filter((mcq: MCQ) => attemptedMCQs && attemptedMCQs[mcq.id]).length; // FIXED: Explicitly typed mcq
+                                        const progress = chapterMcqs.length > 0 ? (attemptedInChapter / chapterMcqs.length) * 100 : 0;
 
                                         return (
                                             <li key={chapter.id}>

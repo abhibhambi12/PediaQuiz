@@ -1,4 +1,4 @@
-// frontend/src/services/firestoreService.ts
+// FILE: frontend/src/services/firestoreService.ts
 
 import { collection, getDocs, query, where, Timestamp, QueryDocumentSnapshot, FieldPath, documentId } from "firebase/firestore";
 import { db } from "@/firebase";
@@ -63,10 +63,11 @@ export async function getAppData(): Promise<AppData> {
         const topicName = data.name || doc.id;
         const rawChapters = (data.chapters || []) as any[];
         
-        let chapters: Chapter[] = rawChapters.map((chapterName: string): Chapter => {
-            const chapterId = normalizeId(chapterName);
+        let chapters: Chapter[] = rawChapters.map((chapterData: any): Chapter => {
+            const name = typeof chapterData === 'string' ? chapterData : chapterData.name;
+            const chapterId = normalizeId(name);
             const countKey = `${topicId}_${chapterId}`;
-            return { id: chapterId, name: chapterName, mcqCount: mcqCounts.get(countKey) || 0, flashcardCount: flashcardCounts.get(countKey) || 0, topicId: topicId, source: 'General' };
+            return { id: chapterId, name: name, mcqCount: mcqCounts.get(countKey) || 0, flashcardCount: flashcardCounts.get(countKey) || 0, topicId: topicId, source: 'General' };
         });
         chapters.sort((a, b) => a.name.localeCompare(b.name));
         
@@ -91,20 +92,21 @@ export async function getAppData(): Promise<AppData> {
         });
         chapters.sort((a, b) => a.name.localeCompare(b.name));
 
+        // --- DEFINITIVE FIX for Duplicate Key Warning & Data Corruption ---
+        // If a topic with the same normalized ID already exists (likely from 'General' topics),
+        // we create a unique ID for this Marrow topic to prevent key conflicts in React and data merging issues.
+        let finalTopicId = topicId;
         if (topicsMap.has(topicId)) {
-            const existingTopic = topicsMap.get(topicId)!;
-            existingTopic.chapters = [...existingTopic.chapters, ...chapters].sort((a, b) => a.name.localeCompare(b.name));
-            existingTopic.chapterCount = existingTopic.chapters.length;
-            existingTopic.totalMcqCount += chapters.reduce((sum, ch) => sum + ch.mcqCount, 0);
-            existingTopic.totalFlashcardCount += chapters.reduce((sum, ch) => sum + ch.flashcardCount, 0);
-        } else {
-            topicsMap.set(topicId, {
-                id: topicId, name: topicName, chapters: chapters, chapterCount: chapters.length,
-                totalMcqCount: chapters.reduce((sum, ch) => sum + ch.mcqCount, 0),
-                totalFlashcardCount: chapters.reduce((sum, ch) => sum + ch.flashcardCount, 0),
-                source: 'Marrow'
-            });
+            finalTopicId = `${topicId}_marrow`; // Append a suffix to make it unique
         }
+        // --- END OF FIX ---
+
+        topicsMap.set(finalTopicId, {
+            id: finalTopicId, name: topicName, chapters: chapters, chapterCount: chapters.length,
+            totalMcqCount: chapters.reduce((sum, ch) => sum + ch.mcqCount, 0),
+            totalFlashcardCount: chapters.reduce((sum, ch) => sum + ch.flashcardCount, 0),
+            source: 'Marrow'
+        });
     });
 
     const allProcessedTopics = Array.from(topicsMap.values()).sort((a, b) => a.name.localeCompare(b.name));
