@@ -1,4 +1,4 @@
-// FILE: workspaces/frontend/src/pages/MarrowQBankPage.tsx
+// --- CORRECTED FILE: workspaces/frontend/src/pages/MarrowQBankPage.tsx ---
 
 import React, { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
@@ -6,32 +6,34 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { useAuth } from '@/contexts/AuthContext';
-import { useTopics } from '@/hooks/useTopics'; // NEW IMPORT: useTopics
+import { useTopics } from '@/hooks/useTopics'; // REFACTORED: Use specific topic hook
 import { getAttemptedMCQs } from '@/services/userDataService';
 import { generateWeaknessBasedTest } from '@/services/aiService';
-import { SessionManager } from '@/services/sessionService'; // NEW IMPORT: SessionManager
+import { SessionManager } from '@/services/sessionService'; // NEW: SessionManager for persistent sessions
 import { ChevronDownIcon, ChevronRightIcon, BrainIcon } from '@/components/Icons';
 import Loader from '@/components/Loader';
 import { useToast } from '@/components/Toast';
-import { useSound } from '@/hooks/useSound'; // NEW IMPORT: useSound
+import { useSound } from '@/hooks/useSound';
 import type { Chapter, Topic, MCQ, AttemptedMCQs } from '@pediaquiz/types';
 import clsx from 'clsx';
-import { HttpsCallableResult } from 'firebase-functions/v2/https';
+import { HttpsCallableResult } from 'firebase-functions/v2/https'; // Ensure correct import for callable result type
 
 const MarrowQBankPage: React.FC = () => {
     const { user } = useAuth();
-    const { data: topics, isLoading: areTopicsLoading } = useTopics(); // NEW HOOK: useTopics
+    // REFACTORED: Use useTopics hook instead of useData
+    const { data: topics, isLoading: areTopicsLoading, error: topicsError } = useTopics();
     const navigate = useNavigate();
     const { addToast } = useToast();
-    const { playSound } = useSound(); // Use sound hook
+    const { playSound } = useSound();
     const [expandedTopics, setExpandedTopics] = useState<Set<string>>(new Set());
     const [isGeneratingTest, setIsGeneratingTest] = useState(false); // For AI test loading state
 
     const marrowTopics = useMemo(() => {
+        // Filter topics by source 'Marrow' from the data loaded by useTopics
         return topics?.filter(topic => topic.source === 'Marrow') || [];
     }, [topics]);
 
-    const { data: keyClinicalTopics, isLoading: isLoadingKeyClinicalTopics } = useQuery<string[]>({
+    const { data: keyClinicalTopics, isLoading: isLoadingKeyClinicalTopics, error: keyTopicsError } = useQuery<string[]>({
         queryKey: ['keyClinicalTopics'],
         queryFn: async () => {
             const snapshot = await getDocs(collection(db, 'KeyClinicalTopics'));
@@ -39,26 +41,52 @@ const MarrowQBankPage: React.FC = () => {
         }
     });
 
-    const { data: attemptedMCQs } = useQuery<AttemptedMCQs>({
+    const { data: attemptedMCQs, isLoading: areAttemptsLoading, error: attemptsError } = useQuery<AttemptedMCQs>({
         queryKey: ['attemptedMCQs', user?.uid],
         queryFn: () => getAttemptedMCQs(user!.uid),
         enabled: !!user,
         initialData: {},
     });
 
-    const generateWeaknessTestMutation = useMutation<HttpsCallableResult<{ mcqIds: string[] }>, Error, { allMcqs: Pick<MCQ, 'id'>[], testSize: number }>({ // Corrected type
-        mutationFn: generateWeaknessBasedTest,
-        onSuccess: async (response) => {
-            const mcqIds = response.data.mcqIds;
-            if (mcqIds.length === 0) {
-                addToast("Could not generate an AI weakness test from Marrow content. Try answering more questions incorrectly!", "warning");
-            } else {
-                playSound('notification');
-                addToast(`Generated a Marrow weakness test with ${mcqIds.length} questions!`, "success");
-                // Create a persistent session in Firestore
-                const sessionId = await SessionManager.createSession(user!.uid, 'weakness', mcqIds);
-                navigate(`/session/weakness/${sessionId}`);
+    const generateWeaknessTestMutation = useMutation<string, Error, { allMcqs: Pick<MCQ, 'id'>[], testSize: number }>({
+        mutationFn: async (vars) => {
+            if (!user) throw new Error("User not authenticated.");
+            // Filter attempted MCQs to find incorrect ones specific to 'Marrow' topics.
+            // This relies on `topics` and `attemptedMCQs` being loaded.
+            const incorrectMarrowMcqIds = Object.keys(attemptedMCQs || {}).filter(mcqId => {
+                const attempt = attemptedMCQs?.[mcqId];
+                if (!attempt || attempt.isCorrect) return false; // Not incorrect
+                
+                // Heuristic: Check if the MCQ ID exists in any Marrow chapter's estimated MCQs.
+                // A more robust solution would be to directly query the MCQ to get its source.
+                // Since this component doesn't load all MCQs, we'll iterate through topics/chapters.
+                return marrowTopics.some(topic => 
+                    topic.chapters.some(chapter => 
+                        chapter.mcqCount > 0 && mcqId.includes(chapter.id) // Simple ID check
+                    )
+                );
+            });
+            
+            if (incorrectMarrowMcqIds.length < 5) {
+                throw new Error("Answer at least 5 Marrow questions incorrectly to unlock AI Marrow weakness tests.");
             }
+
+            const lightweightIncorrectMarrowMcqs = incorrectMarrowMcqIds.map(id => ({ id }));
+            const aiResponse = await generateWeaknessBasedTest({ 
+                allMcqs: lightweightIncorrectMarrowMcqs, 
+                testSize: vars.testSize 
+            });
+            
+            const mcqIds = aiResponse.data.mcqIds;
+            if (mcqIds.length === 0) {
+                throw new Error("Could not generate an AI weakness test from Marrow content.");
+            }
+            return await SessionManager.createSession(user.uid, 'weakness', mcqIds);
+        },
+        onSuccess: (sessionId) => {
+            playSound('notification');
+            addToast(`Generated a Marrow weakness test!`, "success");
+            navigate(`/session/weakness/${sessionId}`);
         },
         onError: (error) => {
             playSound('incorrect');
@@ -69,41 +97,9 @@ const MarrowQBankPage: React.FC = () => {
 
     const handleGenerateMarrowAiTest = () => {
         playSound('buttonClick');
-        if (!user || !topics || !attemptedMCQs) { // Using `topics` instead of global appData
-            addToast("Please log in to generate AI tests.", "warning");
-            return;
-        }
-
-        setIsGeneratingTest(true); // Set loading state
-
-        // Filter `attemptedMCQs` to find all incorrect ones
-        const incorrectMarrowMcqIds = Object.keys(attemptedMCQs).filter(id => {
-            // This requires mapping back to the actual MCQ to check its source
-            // In a production app, the `Attempt` object might store the source to avoid this lookup.
-            // For now, it compiles due to `useTopics` ensuring `topics` is loaded, but it's a heuristic.
-            for (const topic of topics) {
-                if (topic.source === 'Marrow' && topic.chapters.some(ch => ch.mcqCount > 0)) { // Heuristic: chapter has marrow MCQs
-                    // This is still a weak filter, ideally we'd fetch actual MCQs
-                    // However, `generateWeaknessBasedTest` callable takes a light-weight array anyway.
-                    return true; 
-                }
-            }
-            return false;
-        });
-
-        if (incorrectMarrowMcqIds.length < 5) {
-             addToast("Answer at least 5 Marrow questions incorrectly to unlock AI Marrow weakness tests.", "warning");
-             setIsGeneratingTest(false);
-             return;
-        }
-
-        // Send only the lightweight, pre-filtered list of IDs to the AI
-        const lightweightIncorrectMarrowMcqs = incorrectMarrowMcqIds.map(id => ({ id }));
-        
-        generateWeaknessTestMutation.mutate({
-            allMcqs: lightweightIncorrectMarrowMcqs,
-            testSize: 20
-        });
+        setIsGeneratingTest(true);
+        // The mutationFn handles the check for 5 incorrect questions.
+        generateWeaknessTestMutation.mutate({ allMcqs: [], testSize: 20 }); // allMcqs passed as empty, filled by mutationFn
     };
 
     const toggleTopic = (topicId: string) => {
@@ -115,19 +111,13 @@ const MarrowQBankPage: React.FC = () => {
         });
     };
 
-    if (areTopicsLoading || isLoadingKeyClinicalTopics) return <Loader message="Loading Marrow QBank..." />;
+    if (areTopicsLoading || isLoadingKeyClinicalTopics || areAttemptsLoading) return <Loader message="Loading Marrow QBank..." />;
+    if (topicsError || keyTopicsError || attemptsError) return <div className="text-center py-4 text-red-500">Error: {topicsError?.message || keyTopicsError?.message || attemptsError?.message}</div>;
 
     // Check if user has enough incorrect Marrow questions for AI weakness test
-    // This check is a heuristic based on current `topics` and `attemptedMCQs`.
-    // A more robust check might require a backend callable to get these counts.
-    const canGenerateAiTest = user && Object.keys(attemptedMCQs || {}).some(id => {
-        // Find if this attempted MCQ is from a 'Marrow' topic
-        const isMarrowAttempt = topics?.some(t => 
-            t.source === 'Marrow' && t.chapters.some(c => c.mcqCount > 0) // Heuristic
-        );
-        return isMarrowAttempt && attemptedMCQs[id]?.isCorrect === false;
-    });
-
+    // This now relies on the internal logic of `generateWeaknessTestMutation` to perform the check.
+    // We only enable the button if the user is logged in. The mutationFn provides feedback.
+    const canAttemptAiTest = !!user;
 
     return (
         <div className="space-y-6 animate-fade-in-up">
@@ -143,14 +133,16 @@ const MarrowQBankPage: React.FC = () => {
                 </Link>
                 <button
                     onClick={handleGenerateMarrowAiTest}
-                    disabled={generateWeaknessTestMutation.isPending || !canGenerateAiTest || isGeneratingTest}
+                    disabled={generateWeaknessTestMutation.isPending || !canAttemptAiTest || isGeneratingTest}
                     className="btn-secondary py-3 flex items-center justify-center gap-2 text-lg disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                     <BrainIcon />
                     {isGeneratingTest ? "Generating..." : "🎯 Start AI Marrow Weakness Test"}
                 </button>
             </div>
-             {!canGenerateAiTest && <p className="text-xs text-center text-neutral-500 -mt-2">Answer at least 5 Marrow questions incorrectly to unlock AI Marrow weakness tests.</p>}
+             {!canAttemptAiTest && <p className="text-xs text-center text-neutral-500 -mt-2">Log in to unlock AI Marrow weakness tests.</p>}
+             {canAttemptAiTest && Object.values(attemptedMCQs || {}).filter(a => !a.isCorrect).length < 5 && <p className="text-xs text-center text-neutral-500 -mt-2">Answer at least 5 Marrow questions incorrectly to unlock AI Marrow weakness tests.</p>}
+
 
             {/* Key Clinical Topics (Tags) */}
             {keyClinicalTopics && keyClinicalTopics.length > 0 && (

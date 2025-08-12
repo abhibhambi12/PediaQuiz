@@ -1,4 +1,4 @@
-// FILE: workspaces/frontend/src/App.tsx
+// --- CORRECTED FILE: workspaces/frontend/src/App.tsx ---
 
 import React from "react";
 import {
@@ -9,15 +9,15 @@ import {
   Outlet,
 } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
-import { DataProvider } from "./contexts/DataContext";
+import { DataProvider } from "./contexts/DataContext"; // Keep DataProvider for now, even if it does nothing
 import { ToastProvider } from "./components/Toast";
 import Header from "./components/Header";
 import BottomNav from "./components/BottomNav";
 import AdminRoute from "./components/AdminRoute";
 import Loader from "./components/Loader";
 import FloatingActionButton from "./components/FloatingActionButton";
-import ErrorBoundary from "./components/ErrorBoundary"; // NEW IMPORT: ErrorBoundary
-import { SoundProvider } from "./hooks/useSound"; // NEW IMPORT: SoundProvider
+import ErrorBoundary from "./components/ErrorBoundary";
+import { SoundProvider } from "./hooks/useSound";
 
 // Import Pages
 import HomePage from "./pages/HomePage";
@@ -40,11 +40,9 @@ import SearchResultsPage from "./pages/SearchResultsPage";
 import TagsPage from "./pages/TagsPage";
 import TagQuestionsPage from "./pages/TagQuestionsPage";
 import ChapterNotesEditPage from "./pages/ChapterNotesEditPage";
-import QuizResultsPage from "./components/QuizResultsPage"; // Import QuizResultsPage as default
+import QuizResultsPage from "./components/QuizResultsPage"; // Correct import path for QuizResultsPage
 
 const AppLayout: React.FC = () => (
-  // NOTE: Styling classes changed here to use your new Tailwind color palette.
-  // This is a stylistic change to align with upcoming Tailwind updates.
   <div className="flex flex-col min-h-screen bg-neutral-100 dark:bg-neutral-900">
     <Header />
     <main className="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8 mb-20">
@@ -84,10 +82,8 @@ const AppContent: React.FC = () => {
         <Route path="/stats" element={<StatsPage />} />
         <Route path="/log-screen" element={<LogScreenPage />} />
         <Route path="/bookmarks" element={<BookmarksPage />} />
-        {/* NOTE: Updated route parameter name for consistency with session concepts. */}
-        {/* The component itself will use location.state as before. */}
+        {/* MCQ Session routes */}
         <Route path="/session/:mode/:sessionId" element={<MCQSessionPage />} />
-        {/* Dedicated route for quiz results */}
         <Route path="/session/:mode/:sessionId/results" element={<QuizResultsPage />} />
         <Route path="/search" element={<SearchResultsPage />} />
         
@@ -136,19 +132,20 @@ const AppContent: React.FC = () => {
         />
       </Route>
 
+      {/* Catch-all route */}
       <Route path="*" element={<Navigate to={user ? "/" : "/auth"} replace />} />
     </Routes>
   );
 };
 
 const App: React.FC = () => (
-  // --- NEW: Wrap the entire application in the ErrorBoundary ---
   <ErrorBoundary>
     <ToastProvider>
       <AuthProvider>
-        <DataProvider>
+        {/* DataProvider is kept for structural consistency, even if it provides no data currently */}
+        <DataProvider> 
           <Router>
-            <SoundProvider> {/* NEW: Wrap AppContent with SoundProvider */}
+            <SoundProvider>
               <AppContent />
             </SoundProvider>
           </Router>

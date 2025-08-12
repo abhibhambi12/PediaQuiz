@@ -1,24 +1,35 @@
-// FILE: frontend/src/pages/TagsPage.tsx
-// MODIFIED: Fixed implicit any. Continues to use `useData()` for content.
+// --- CORRECTED FILE: workspaces/frontend/src/pages/TagsPage.tsx ---
 
 import React, { useState, useMemo } from 'react';
-import { useData } from '@/contexts/DataContext'; // IMPORTANT: Using useData
+import { useQuery } from '@tanstack/react-query'; // Import useQuery
 import Loader from '@/components/Loader';
 import { Link } from 'react-router-dom';
-import clsx from 'clsx'; // For conditional styling
+import clsx from 'clsx';
+import { db } from '@/firebase'; // Import db for direct Firestore queries
+import { collection, getDocs, orderBy } from 'firebase/firestore'; // Import necessary Firestore functions
+
+// Helper function to fetch all key clinical topics
+async function getKeyClinicalTopics(): Promise<string[]> {
+    const snapshot = await getDocs(collection(db, 'KeyClinicalTopics'));
+    return snapshot.docs.map(doc => doc.data().name as string).sort();
+}
 
 const TagsPage: React.FC = () => {
-    const { data: appData, isLoading, error } = useData(); // IMPORTANT: Using useData
-    const [searchTerm, setSearchTerm] = useState('');
+    // REFACTORED: Use specific query for key clinical topics
+    const { data: allTags, isLoading, error } = useQuery<string[]>({
+        queryKey: ['keyClinicalTopics'],
+        queryFn: getKeyClinicalTopics,
+        staleTime: 1000 * 60 * 60, // Cache for 1 hour as tags change infrequently
+    });
 
-    const allTags = useMemo(() => appData?.keyClinicalTopics || [], [appData]); // DEPENDS ON appData
+    const [searchTerm, setSearchTerm] = useState('');
 
     const filteredTags = useMemo(() => {
         if (!searchTerm.trim()) {
-            return allTags;
+            return allTags || [];
         }
         const lowerCaseSearch = searchTerm.toLowerCase();
-        return allTags.filter((tag: string) => tag.toLowerCase().includes(lowerCaseSearch)); // FIXED: Explicitly typed tag
+        return (allTags || []).filter((tag: string) => tag.toLowerCase().includes(lowerCaseSearch));
     }, [allTags, searchTerm]);
 
     if (isLoading) return <Loader message="Loading tags..." />;
@@ -49,7 +60,7 @@ const TagsPage: React.FC = () => {
                 </div>
             ) : (
                 <div className="flex flex-wrap gap-3">
-                    {filteredTags.map((tag: string) => ( // FIXED: Explicitly typed tag
+                    {filteredTags.map((tag: string) => (
                         <Link
                             key={tag}
                             to={`/tags/${encodeURIComponent(tag.replace(/\s+/g, '_').toLowerCase())}`}

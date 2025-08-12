@@ -1,10 +1,13 @@
+# --- CORRECTED FILE: netlify.toml ---
 [build]
   # The base directory is the root of your monorepo.
   base = "/"
   # The publish directory for the final build artifacts.
-  publish = "frontend/dist"
-  # This multi-step command is the definitive fix.
-  command = "(cd packages/types && npm install && npm run build && npm pack) && npm install && npm run build"
+  # CORRECTED: The path must include the 'workspaces' directory for the frontend build output.
+  publish = "workspaces/frontend/dist"
+  # This command is now simple and correct. It relies on the root package.json's build script,
+  # which correctly builds all workspaces in the right order.
+  command = "npm run build"
 
 [build.environment]
   # Specify the Node.js version to match your local and Firebase environments.

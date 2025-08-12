@@ -1,8 +1,8 @@
-// FILE: workspaces/frontend/src/services/aiService.ts
+// --- CORRECTED FILE: workspaces/frontend/src/services/aiService.ts ---
 
 import { httpsCallable, HttpsCallableResult } from 'firebase/functions';
 import { functions } from '@/firebase';
-import type { ChatMessage, MCQ } from '@pediaquiz/types';
+import type { ChatMessage, MCQ, PediaquizTopicType } from '@pediaquiz/types'; // PediaquizTopicType might be needed for autoAssignContent
 
 // Callable Function references (prefixed with _ for internal use)
 const _chatWithAssistant = httpsCallable<{ prompt: string, history: ChatMessage[] }, { response: string }>(functions, 'chatWithAssistant');
@@ -11,16 +11,16 @@ const _generateWeaknessBasedTest = httpsCallable< { allMcqs: Pick<MCQ, 'id'>[], 
 const _updateChapterNotes = httpsCallable< { topicId: string, chapterId: string, newSummary: string, source: 'General' | 'Marrow' }, { success: boolean } >(functions, 'updateChapterNotes');
 const _processManualTextInput = httpsCallable< { fileName: string, rawText: string, isMarrow: boolean }, { success: boolean, uploadId: string, extractedMcqs: Partial<MCQ>[], suggestedNewMcqCount: number } >(functions, 'processManualTextInput');
 
-// New Feature Callable References
+// --- NEW FEATURE CALLABLE REFERENCES ---
 const _getDailyWarmupQuiz = httpsCallable< never, { mcqIds: string[] } >(functions, 'getDailyWarmupQuiz');
 const _getQuizSessionFeedback = httpsCallable< { quizResultId: string }, { feedback: string } >(functions, 'getQuizSessionFeedback');
 const _getExpandedSearchTerms = httpsCallable< { query: string }, { terms: string[] } >(functions, 'getExpandedSearchTerms');
 const _processMarrowText = httpsCallable< { rawText: string, fileName: string }, { uploadId: string, extractedMcqs: Partial<MCQ>[], suggestedNewMcqCount: number } >(functions, 'processMarrowText');
-const _generateAndStageMarrowMcqs = httpsCallable< { uploadId: string, count: number }, { success: boolean } >(functions, 'generateAndStageMarrowMcqs');
+const _generateAndStageMarrowMcqs = httpsCallable< { uploadId: string, count: number }, { success: boolean } >(functions, 'generateAndStageMarrowMcqs'); // Used by AdminReviewPage
 const _generateChapterSummary = httpsCallable< { uploadIds: string[] }, { summary: string } >(functions, 'generateChapterSummary');
 const _addFlashcardAttempt = httpsCallable< { flashcardId: string, rating: 'again' | 'good' | 'easy' }, { success: boolean } >(functions, 'addFlashcardAttempt');
-const _generateGeneralContent = httpsCallable<{ uploadId: string, count: number }, { success: boolean }>(functions, 'generateGeneralContent');
-
+const _generateGeneralContent = httpsCallable<{ uploadId: string, count: number }, { success: boolean }>(functions, 'generateGeneralContent'); // Used by AdminUploadCard
+const _autoAssignContent = httpsCallable<{ uploadId: string, existingTopics: PediaquizTopicType[], scopeToTopicName?: string }, { success: boolean, suggestions: any[] }>(functions, 'autoAssignContent'); // Used by AdminReviewPage, ensure type for suggestions
 
 // Exported functions for frontend components to use
 export const chatWithAssistant = async (data: { prompt: string, history: ChatMessage[] }): Promise<HttpsCallableResult<{ response: string }>> => {
@@ -75,4 +75,9 @@ export const generateChapterSummary = async (data: { uploadIds: string[] }): Pro
 
 export const addFlashcardAttempt = async (data: { flashcardId: string, rating: 'again' | 'good' | 'easy' }): Promise<HttpsCallableResult<{ success: boolean }>> => {
     return await _addFlashcardAttempt(data);
+};
+
+// Ensure autoAssignContent is also exported if used by frontend.
+export const autoAssignContent = async (data: { uploadId: string, existingTopics: PediaquizTopicType[], scopeToTopicName?: string }): Promise<HttpsCallableResult<{ success: boolean, suggestions: any[] }>> => {
+    return await _autoAssignContent(data);
 };

@@ -1,96 +1,120 @@
-// FILE: frontend/src/pages/FlashcardSessionPage.tsx
+// --- CORRECTED FILE: workspaces/frontend/src/pages/FlashcardSessionPage.tsx ---
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
-import { useData } from '@/contexts/DataContext'; // IMPORTANT: Using useData for global appData
+import { useTopics } from '@/hooks/useTopics'; // REFACTORED: Use specific topic hook
+import { useChapterContent } from '@/hooks/useChapterContent'; // REFACTORED: Use specific chapter content hook
 import { useToast } from '@/components/Toast';
 import { deleteContentItem, toggleBookmark, getBookmarks } from '@/services/userDataService';
-import { addFlashcardAttempt } from '@/services/aiService'; // NEW IMPORT: for flashcard spaced repetition
+import { addFlashcardAttempt } from '@/services/aiService'; // For flashcard spaced repetition
 import Loader from '@/components/Loader';
 import { TrashIcon, BookmarkIcon } from '@/components/Icons';
 import ConfirmationModal from '@/components/ConfirmationModal';
-import type { Flashcard, ToggleBookmarkCallableData, DeleteContentItemCallableData } from '@pediaquiz/types'; // FIXED: Ensure types are imported
-import clsx from 'clsx'; // For conditional styling
+import type { Flashcard, ToggleBookmarkCallableData, DeleteContentItemCallableData, Topic, Chapter } from '@pediaquiz/types';
+import clsx from 'clsx';
+import { useSound } from '@/hooks/useSound';
 
-// --- NEW TYPE: For flashcard confidence rating ---
 type ConfidenceRating = 'again' | 'good' | 'easy';
-// --- END NEW TYPE ---
-
 
 const FlashcardSessionPage: React.FC = () => {
     const { topicId, chapterId } = useParams<{ topicId: string; chapterId: string }>();
-    const { data: appData, isLoading } = useData(); // IMPORTANT: Using useData for global appData
-    const { user } = useAuth(); // user is now UserContextType
+    const { user } = useAuth();
     const queryClient = useQueryClient();
     const { addToast } = useToast();
+    const { playSound } = useSound();
+
+    // REFACTORED: Fetch topics for chapter name lookup
+    const { data: topics, isLoading: areTopicsLoading, error: topicsError } = useTopics();
+    // REFACTORED: Fetch flashcards specifically for this chapter
+    const { data: chapterContent, isLoading: isContentLoading, error: contentError } = useChapterContent(chapterId);
 
     const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
     const [currentCardIndex, setCurrentCardIndex] = useState(0);
     const [isFlipped, setIsFlipped] = useState(false);
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
-    const { data: bookmarks } = useQuery<string[]>({ // Explicitly typed
-        queryKey: ['bookmarks', user?.uid], // FIXED: uid is now on UserContextType
-        queryFn: () => getBookmarks(user!.uid), // FIXED: uid is now on UserContextType
+    // Derive topic and chapter name for display
+    const { currentTopic, currentChapter } = useMemo(() => {
+        const topic = topics?.find(t => t.id === topicId);
+        const chapter = topic?.chapters.find(c => c.id === chapterId);
+        return { currentTopic: topic, currentChapter: chapter };
+    }, [topics, topicId, chapterId]);
+
+
+    const { data: bookmarks } = useQuery<string[]>({
+        queryKey: ['bookmarks', user?.uid],
+        queryFn: () => getBookmarks(user!.uid),
         enabled: !!user,
         initialData: [],
     });
 
-    // --- NEW MUTATION: for recording flashcard attempts/ratings ---
     const addFlashcardAttemptMutation = useMutation<any, Error, { flashcardId: string, rating: ConfidenceRating }>({
         mutationFn: (vars) => addFlashcardAttempt(vars),
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['attemptedFlashcards', user?.uid] }); // Invalidate if you add a query for attempted flashcards
-            // No toast here to avoid interrupting flow, success is silent
+            queryClient.invalidateQueries({ queryKey: ['attemptedFlashcards', user?.uid] });
         },
         onError: (error) => addToast(`Failed to record flashcard attempt: ${error.message}`, "error"),
     });
-    // --- END NEW MUTATION ---
 
     const deleteFlashcardMutation = useMutation<any, Error, DeleteContentItemCallableData>({
         mutationFn: deleteContentItem,
         onSuccess: () => {
+            playSound('notification');
             addToast("Flashcard deleted successfully.", "success");
-            queryClient.invalidateQueries({ queryKey: ['appData'] }); // Invalidate general app data
-            // Update local state without refetching all appData
+            queryClient.invalidateQueries({ queryKey: ['topics'] }); // Invalidate topics for updated counts
+            queryClient.invalidateQueries({ queryKey: ['chapterContent', chapterId] }); // Invalidate chapter's content
+            
+            // Update local state by removing the deleted card and adjusting index
             if (flashcards.length > 1) {
-                setFlashcards(prev => prev.filter((fc: Flashcard) => fc.id !== currentCard?.id)); // Explicitly typed
+                setFlashcards(prev => prev.filter((fc: Flashcard) => fc.id !== currentCard?.id));
                 setCurrentCardIndex(prev => (prev >= flashcards.length - 1 ? 0 : prev));
             } else {
-                setFlashcards([]);
+                setFlashcards([]); // No cards left, session is empty
             }
         },
-        onError: (error) => addToast(`Error deleting flashcard: ${error.message}`, "error"),
+        onError: (error) => {
+            playSound('incorrect');
+            addToast(`Error deleting flashcard: ${error.message}`, "error");
+        },
     });
 
     const toggleBookmarkMutation = useMutation<any, Error, ToggleBookmarkCallableData>({
         mutationFn: toggleBookmark,
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['bookmarks', user?.uid] }), // FIXED: uid is on UserContextType
-        onError: (error) => addToast(`Error toggling bookmark: ${error.message}`, "error"),
+        onSuccess: () => {
+            playSound('buttonClick'); // Play a click sound even for bookmark toggle
+            queryClient.invalidateQueries({ queryKey: ['bookmarks', user?.uid] });
+        },
+        onError: (error) => {
+            playSound('incorrect');
+            addToast(`Error toggling bookmark: ${error.message}`, "error");
+        },
     });
 
     useEffect(() => {
-        // IMPORTANT: Filters directly from appData.flashcards
-        if (appData?.flashcards && topicId && chapterId) {
-            const filteredFlashcards = appData.flashcards.filter((fc: Flashcard) => // Explicitly typed fc
+        // REFACTORED: Populate flashcards from useChapterContent data
+        if (chapterContent?.flashcards && topicId && chapterId) {
+            const filteredFlashcards = chapterContent.flashcards.filter((fc: Flashcard) => // filter again just in case, though useChapterContent should be specific
                 fc.topicId === topicId && (chapterId === 'all' || fc.chapterId === chapterId)
             );
             setFlashcards(filteredFlashcards.sort(() => Math.random() - 0.5));
             setCurrentCardIndex(0);
             setIsFlipped(false);
         }
-    }, [appData, topicId, chapterId]); // DEPENDS ON appData
-    
+    }, [chapterContent, topicId, chapterId]); // DEPENDS ON chapterContent
+
     const currentCard = useMemo(() => flashcards[currentCardIndex], [flashcards, currentCardIndex]);
     const isBookmarked = useMemo(() => !!(bookmarks && currentCard && bookmarks.includes(currentCard.id)), [bookmarks, currentCard]);
 
-    const handleFlip = () => setIsFlipped(f => !f);
+    const handleFlip = () => {
+        playSound('flip'); // Assuming you have a 'flip' sound configured
+        setIsFlipped(f => !f);
+    };
 
-    // --- NEW FUNCTION: Handle confidence rating and advance card ---
     const handleConfidenceRating = (rating: ConfidenceRating) => {
         if (!currentCard) return;
+        playSound('buttonClick'); 
         
         addFlashcardAttemptMutation.mutate({ flashcardId: currentCard.id, rating });
 
@@ -100,25 +124,12 @@ const FlashcardSessionPage: React.FC = () => {
             setCurrentCardIndex(prev => (prev + 1) % flashcards.length);
         }, 150);
     };
-    // --- END NEW FUNCTION ---
-
-    const handleNext = () => {
-        setIsFlipped(false);
-        setTimeout(() => {
-            setCurrentCardIndex(prev => (prev + 1) % flashcards.length);
-        }, 150);
-    };
-
-    const handlePrevious = () => {
-        setIsFlipped(false);
-        setTimeout(() => {
-            setCurrentCardIndex(prev => (prev - 1 + flashcards.length) % flashcards.length);
-        }, 150);
-    };
 
     const handleDeleteFlashcard = () => {
-        if (!user?.isAdmin || !currentCard) return; // FIXED: isAdmin is on UserContextType
-        deleteFlashcardMutation.mutate({ id: currentCard.id, type: 'flashcard', collectionName: 'Flashcards' });
+        if (!user?.isAdmin || !currentCard) return;
+        // Determine collection name based on source. Default to 'Flashcards' if not explicitly defined.
+        const collectionName: 'Flashcards' = 'Flashcards'; 
+        deleteFlashcardMutation.mutate({ id: currentCard.id, type: 'flashcard', collectionName });
         setIsDeleteModalOpen(false);
     };
 
@@ -127,8 +138,13 @@ const FlashcardSessionPage: React.FC = () => {
         toggleBookmarkMutation.mutate({ contentId: currentCard.id, contentType: 'flashcard' });
     };
 
-    if (isLoading || deleteFlashcardMutation.isPending || toggleBookmarkMutation.isPending || addFlashcardAttemptMutation.isPending) return <Loader message="Loading flashcards..." />;
-    if (!appData && !isLoading) return <div className="text-center p-10 text-red-500">Error loading data.</div>; // DEPENDS ON appData
+    // Combined loading state for all necessary data
+    if (areTopicsLoading || isContentLoading || deleteFlashcardMutation.isPending || toggleBookmarkMutation.isPending || addFlashcardAttemptMutation.isPending) {
+        return <Loader message="Loading flashcards..." />;
+    }
+    if (topicsError || contentError) {
+        return <div className="text-center p-10 text-red-500">Error loading data: {topicsError?.message || contentError?.message}</div>;
+    }
     if (flashcards.length === 0 || !currentCard) {
         return <div className="text-center p-10">No flashcards found for this selection.</div>;
     }
@@ -149,12 +165,12 @@ const FlashcardSessionPage: React.FC = () => {
             <div className="max-w-xl mx-auto p-4">
                 <div className="flex justify-between items-center mb-4">
                     <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200">
-                        Flashcards - {currentCard.chapterName}
+                        Flashcards - {currentChapter?.name || 'Loading Chapter...'}
                     </h2>
                     <div className="flex items-center space-x-2">
-                        {user?.isAdmin && ( // FIXED: isAdmin is on UserContextType
+                        {user?.isAdmin && (
                             <button
-                                onClick={() => setIsDeleteModalOpen(true)}
+                                onClick={() => { playSound('buttonClick'); setIsDeleteModalOpen(true); }}
                                 className="p-2 rounded-full text-slate-400 hover:text-red-500"
                                 title="Delete Flashcard"
                             >
@@ -187,42 +203,36 @@ const FlashcardSessionPage: React.FC = () => {
                     </div>
                 </div>
 
-                {/* --- NEW SECTION: Confidence Rating Buttons (shown only when flipped) --- */}
                 {isFlipped && (
                     <div className="flex justify-around mt-6 space-x-2 animate-fade-in-up">
                         <button 
                             onClick={() => handleConfidenceRating('again')} 
-                            className="px-6 py-2 rounded-md font-bold bg-red-500 text-white hover:bg-red-600 flex-1 text-lg" // Using btn-danger style
+                            className="px-6 py-2 rounded-md font-bold bg-red-500 text-white hover:bg-red-600 flex-1 text-lg"
                         >
                             😥 Again
                         </button>
                         <button 
                             onClick={() => handleConfidenceRating('good')} 
-                            className="px-6 py-2 rounded-md font-bold bg-amber-500 text-white hover:bg-amber-600 flex-1 text-lg" // Using btn-warning style
+                            className="px-6 py-2 rounded-md font-bold bg-amber-500 text-white hover:bg-amber-600 flex-1 text-lg"
                         >
                             🤔 Good
                         </button>
                         <button 
                             onClick={() => handleConfidenceRating('easy')} 
-                            className="px-6 py-2 rounded-md font-bold bg-green-500 text-white hover:bg-green-600 flex-1 text-lg" // Using btn-success style
+                            className="px-6 py-2 rounded-md font-bold bg-green-500 text-white hover:bg-green-600 flex-1 text-lg"
                         >
                             🥳 Easy
                         </button>
                     </div>
                 )}
-                {/* --- END NEW SECTION --- */}
-
-                {/* --- UPDATED: Conditionally render Flip button if not flipped --- */}
                 {!isFlipped && (
                      <button 
                         onClick={handleFlip}
-                        className="w-full px-6 py-3 mt-6 text-lg rounded-md bg-sky-500 text-white hover:bg-sky-600 transition-colors" // Using btn-primary style
+                        className="w-full px-6 py-3 mt-6 text-lg rounded-md bg-sky-500 text-white hover:bg-sky-600 transition-colors"
                     >
                         Flip Card
                     </button>
                 )}
-                {/* --- END UPDATED --- */}
-
                 <div className="text-center mt-4 text-sm font-medium text-slate-500 dark:text-slate-400">
                     Card {currentCardIndex + 1} of {flashcards.length}
                 </div>

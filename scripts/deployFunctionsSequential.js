@@ -1,4 +1,4 @@
-// FILE: scripts/deployFunctionsSequential.js
+// --- CORRECTED FILE: scripts/deployFunctionsSequential.js ---
 
 const { execSync } = require('child_process');
 const path = require('path');
@@ -9,47 +9,46 @@ const firebasePath = path.resolve(__dirname, '../node_modules/.bin/firebase');
 // --- CORRECTED: Comprehensive and accurate list of all functions to deploy ---
 // This list MUST match the function exports in functions/src/index.ts
 const FUNCTIONS_LIST = [
-    // Auth & Core Triggers
-    "onUserCreate",
+    // Auth & Storage Triggers (V2) - Note: onUserCreate is V1, handled separately
     "onFileUploaded",
     "onContentReadyForReview",
 
-    // Core User Data Management (existing and new)
+    // Core User Data Management
     "addquizresult",
     "addattempt",
     "togglebookmark",
-    "addFlashcardAttempt", // NEW FUNCTION
+    "addFlashcardAttempt",
 
     // Admin Content Pipeline & Management
-    "createUploadFromText",
-    "processMarrowText", // NEW FUNCTION
+    "processManualTextInput", // Confirmed in aiService.ts and used by frontend
     "extractMarrowContent",
     "generateAndAnalyzeMarrowContent",
     "approveMarrowContent",
-    "approveContent", // Existing, but confirming presence
-    "deletecontentitem", // Existing, but confirming presence
-    "resetUpload", // Existing, but confirming presence
-    "archiveUpload", // Existing, but confirming presence
-    "reassignContent", // Existing, but confirming presence
-    "prepareForRegeneration", // Existing, but confirming presence
-    "suggestClassification", // Existing, but confirming presence
-    "prepareBatchGeneration", // Existing, but confirming presence
-    "startAutomatedBatchGeneration", // Existing, but confirming presence
-    // Note: functions like `generateGeneralContent` or `approveGeneralContent` are called from AdminUploadCard.tsx
-    // but might not be explicitly listed here if they are part of a larger process.
-    // If they exist as separate `onCall` exports in `functions/src/index.ts`, they should be added here.
+    "approveContent",
+    "deletecontentitem",
+    "resetUpload",
+    "archiveUpload",
+    "reassignContent",
+    "prepareForRegeneration",
+    "suggestClassification",
+    "prepareBatchGeneration",
+    "startAutomatedBatchGeneration",
+    "autoAssignContent", // Present in functions/src/index.ts from prompt, needs to be deployed
+    "updateChapterNotes",
+    "generateGeneralContent", // Confirmed in aiService.ts and used by frontend
 
-    // AI Features (existing and new)
+    // AI Features
     "chatWithAssistant",
     "generatePerformanceAdvice",
     "generateWeaknessBasedTest",
-    "getDailyWarmupQuiz",
-    "getQuizSessionFeedback",
-    "getExpandedSearchTerms",
-    // If `generateChapterSummary` exists in index.ts, add it here too.
+    "getDailyWarmupQuiz", // Confirmed in aiService.ts and used by frontend
+    "getQuizSessionFeedback", // Confirmed in aiService.ts and used by frontend
+    "getExpandedSearchTerms", // Confirmed in aiService.ts and used by frontend
+    "generateAndStageMarrowMcqs", // Confirmed in aiService.ts and used by frontend
+    "generateChapterSummary", // Confirmed in aiService.ts and used by frontend
 
-    // New Scheduled Function
-    "cleanupExpiredSessions", // NEW FUNCTION
+    // Scheduled Function
+    "cleanupExpiredSessions",
 ];
 // --- END OF CORRECTION ---
 
@@ -57,8 +56,6 @@ async function deploySequentially() {
     console.log(`Starting sequential deployment of ${FUNCTIONS_LIST.length} functions...`);
 
     // First, run the local build and packaging steps once.
-    // This calls the `deploy-functions.sh` script in 'build-only' mode,
-    // which is responsible for building all workspaces and preparing `functions/dist`.
     console.log("\n--- Running local build and packaging steps (from deploy-functions.sh's logic)...");
     try {
         // CORRECTED: Call deploy-functions.sh using its full path relative to this script.
@@ -69,12 +66,21 @@ async function deploySequentially() {
         process.exit(1);
     }
 
+    // Deploy V1 functions (like onUserCreate) as a group first, if they are defined as V1 functions
+    // (Firebase handles V1 functions differently, often deploying them as part of a group based on source).
+    // The provided firebase.json implies onUserCreate is a functionsV1 trigger, not a callable,
+    // so it might be implicitly deployed. For callable/explicit V2 functions, the loop below is for them.
+    // If 'onUserCreate' is specifically a V1-style trigger (like functions.auth.user().onCreate),
+    // it's often deployed by the `firebase deploy --only functions` command implicitly when its source is included.
+    // However, if the intent was to deploy V1 callables specifically, they'd need to be listed.
+    // For now, relying on firebase.json and V2 functions being explicit.
+    // If you explicitly wanted to target a V1 function, you would add a `firebase deploy --only functions:onUserCreate` here.
+    // Since it's omitted in `FUNCTIONS_LIST` (as it's a trigger, not onCall), no explicit V1 deploy command is added here.
+
     for (const funcName of FUNCTIONS_LIST) {
         try {
             console.log(`\n--- Deploying function: ${funcName} ---`);
             // Execute firebase deploy for a single function.
-            // The firebase.json 'source' property is now correctly set to 'functions/dist'.
-            // So, `firebase deploy --only functions:functionName` will deploy the correct code.
             execSync(`${firebasePath} deploy --only functions:${funcName}`, { stdio: 'inherit' });
             console.log(`--- Successfully deployed: ${funcName} ---`);
         } catch (error) {
@@ -86,5 +92,3 @@ async function deploySequentially() {
 
     console.log("\n✅ All functions deployed sequentially!");
 }
-
-deploySequentially();
