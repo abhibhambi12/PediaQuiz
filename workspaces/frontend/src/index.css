@@ -1,0 +1,106 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    font-family: "Inter", sans-serif;
+    @apply bg-slate-50 text-slate-800 antialiased;
+  }
+
+  .dark body {
+    @apply bg-slate-900 text-slate-200;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply text-slate-800 dark:text-slate-50 font-semibold;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply px-4 py-2 rounded-md font-semibold bg-sky-500 text-white hover:bg-sky-600 active:bg-sky-700 transition-all duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed shadow;
+  }
+  .btn-secondary {
+    @apply px-4 py-2 rounded-md font-semibold bg-indigo-500 text-white hover:bg-indigo-600 active:bg-indigo-700 transition-all duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed shadow;
+  }
+  .btn-success {
+    @apply px-4 py-2 rounded-md font-semibold bg-green-500 text-white hover:bg-green-600 active:bg-green-700 transition-all duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed shadow;
+  }
+  .btn-danger {
+    @apply px-4 py-2 rounded-md font-semibold bg-red-500 text-white hover:bg-red-600 active:bg-red-700 transition-all duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed shadow;
+  }
+  .btn-warning {
+    @apply px-4 py-2 rounded-md font-semibold bg-amber-500 text-white hover:bg-amber-600 active:bg-amber-700 transition-all duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed shadow;
+  }
+  .btn-neutral {
+    @apply px-4 py-2 rounded-md font-semibold bg-slate-200 text-slate-700 hover:bg-slate-300 transition-all duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600 shadow;
+  }
+
+  .input-field {
+    @apply w-full px-3 py-2 border rounded-md bg-slate-50 border-slate-300 dark:bg-slate-700 dark:border-slate-600 focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-900 dark:text-slate-100;
+  }
+
+  .card-base {
+    @apply bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700;
+  }
+}
+
+@layer utilities {
+  .transform-style-preserve-3d {
+    transform-style: preserve-3d;
+  }
+  .backface-hidden {
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+  }
+  .transform-rotate-y-180 {
+    transform: rotateY(180deg);
+  }
+  .animate-fade-in-down {
+    animation: fadeInDown 0.3s ease-out forwards;
+  }
+  @keyframes fadeInDown {
+    from {
+      opacity: 0;
+      transform: translateY(-20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  .animate-pop-in {
+    animation: popIn 0.2s ease-out forwards;
+  }
+  @keyframes popIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  .animate-fade-in-up {
+    animation: fadeInUp 0.3s ease-out forwards;
+  }
+  @keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}

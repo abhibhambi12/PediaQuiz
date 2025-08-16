@@ -1,0 +1,29 @@
+{
+  "name": "pediaquiz-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=9.0.0"
+  },
+  "workspaces": [
+    "workspaces/frontend",
+    "workspaces/functions",
+    "workspaces/types"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace=@pediaquiz/types && npm run build --workspace=@pediaquiz/functions && npm run build --workspace=@pediaquiz/frontend",
+    "dev": "npm run dev --workspace=@pediaquiz/frontend",
+    "clean": "npm cache clean --force && rm -rf node_modules package-lock.json && find ./workspaces -name 'node_modules' -type d -exec rm -rf {} + && find ./workspaces -name 'package-lock.json' -type f -delete",
+    "firebase": "firebase",
+    "deploy": "firebase deploy",
+    "deploy:functions": "npm run build --workspace=@pediaquiz/functions && firebase deploy --only functions",
+    "deploy:all": "npm run build && firebase deploy",
+    "deploy:hosting": "npm run build --workspace=@pediaquiz/frontend && firebase deploy --only hosting",
+    "emulate": "firebase emulators:start"
+  },
+  "devDependencies": {
+    "firebase-tools": "^13.13.2",
+    "typescript": "^5.4.5"
+  }
+}

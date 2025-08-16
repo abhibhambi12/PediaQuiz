@@ -1,0 +1,12 @@
+[build]
+  base = "/"
+  publish = "workspaces/frontend/dist"
+  command = "npm run build --workspace=@pediaquiz/frontend"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

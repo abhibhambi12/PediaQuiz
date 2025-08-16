@@ -1,0 +1,16 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "attemptedMCQs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "latestAttempt.nextReviewDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "attemptedFlashcards",
+      "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "nextReviewDate", "order": "ASCENDING" }]
+    }
+  ]
+}

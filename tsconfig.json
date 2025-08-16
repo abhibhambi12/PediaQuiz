@@ -1,0 +1,11 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./workspaces/types" },
+    { "path": "./workspaces/functions" },
+    { "path": "./workspaces/frontend" }
+  ],
+  "compilerOptions": {
+    "baseUrl": "."
+  }
+}
