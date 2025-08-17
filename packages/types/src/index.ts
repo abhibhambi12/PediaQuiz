@@ -1,9 +1,8 @@
-// workspaces/types/src/index.ts
 export interface User {
     uid: string;
     email: string | null;
     displayName: string | null;
-    isAdmin: boolean; // This property is crucial for isAdmin checks
+    isAdmin: boolean;
     createdAt: Date;
     lastLogin: Date;
     bookmarks?: string[];
@@ -36,9 +35,9 @@ export interface Topic {
     totalFlashcardCount: number;
     source?: 'General' | 'Marrow';
 }
-// FIX: Corrected PediaquizUserType alias to reference the User interface.
-export type PediaquizTopicType = Topic; // Keep for existing usage
-export type PediaquizUserType = User; // Correctly reference the User interface
+
+export type PediaquizTopicType = Topic;
+export type PediaquizUserType = User;
 
 export type ContentStatus = 'pending' | 'approved' | 'rejected' | 'archived';
 
@@ -146,21 +145,13 @@ export interface AwaitingReviewData {
     flashcards: Partial<Flashcard>[];
 }
 
-export type UploadStatus =
-    | 'processing_ocr'
-    | 'pending_planning'
-    | 'pending_generation'
-    | 'generating_content'
-    | 'generation_failed_partially'
-    | 'pending_assignment'
-    | 'completed'
-    | 'error'
-    | 'archived';
+export type UploadStatus = 'pending_upload' | 'pending_ocr' | 'failed_ocr' | 'processed' | 'pending_classification' | 'pending_approval' | 'batch_ready' | 'generating_batch' | 'pending_final_review' | 'pending_marrow_generation_approval' | 'pending_generation_decision' | 'pending_planning' | 'pending_generation' | 'generating_content' | 'generation_failed_partially' | 'pending_assignment' | 'pending_assignment_review' | 'completed' | 'error' | 'failed_unsupported_type' | 'archived' | 'failed_ai_extraction' | 'failed_api_permission';
 
 export interface ContentGenerationJob {
     id: string;
     userId: string;
     title: string;
+    fileName?: string; // Added from code usage and older versions
     pipeline: 'general' | 'marrow';
     status: UploadStatus;
     sourceText?: string;
@@ -183,6 +174,14 @@ export interface ContentGenerationJob {
     }>;
     finalAwaitingReviewData?: AwaitingReviewData;
     assignmentSuggestions?: AssignmentSuggestion[];
+    stagedContent?: { // Added from code and older versions
+        extractedMcqs?: Partial<MCQ>[];
+        orphanExplanations?: string[];
+        generatedMcqs?: Partial<MCQ>[];
+        generatedFlashcards?: Partial<Flashcard>[];
+    };
+    suggestedKeyTopics?: string[]; // Added from code
+    existingQuestionSnippets?: string[]; // Added from code
 }
 
 export interface ChatMessage { id: string; text: string; sender: 'user' | 'assistant'; timestamp: Date; }

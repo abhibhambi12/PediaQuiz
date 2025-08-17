@@ -4,7 +4,7 @@ This project is a web application built with React, TypeScript, and Firebase, de
 
 ## Setup Instructions
 
-1. **Clone the Repository**:
-   ```bash
-   git clone <repository-url>
-   cd <repository-name>
+1.  **Clone the Repository**:
+    ```bash
+    git clone <repository-url>
+    cd <repository-name>

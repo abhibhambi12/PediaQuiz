@@ -2,14 +2,17 @@ import { useQuery } from '@tanstack/react-query';
 import { getChapterContent } from '@/services/firestoreService';
 import type { MCQ, Flashcard } from '@pediaquiz/types';
 
-export function useChapterContent(chapterId: string | undefined) {
+/**
+ * Fetches all MCQs and Flashcards for a specific chapter, identified by its source and name.
+ */
+export function useChapterContent(topicSource: 'General' | 'Marrow' | undefined, chapterName: string | undefined) {
   return useQuery<{ mcqs: MCQ[], flashcards: Flashcard[] }, Error>({
-    queryKey: ['chapterContent', chapterId],
+    queryKey: ['chapterContent', topicSource, chapterName],
     queryFn: async () => {
-      if (!chapterId) return { mcqs: [], flashcards: [] };
-      return getChapterContent(chapterId);
+      if (!topicSource || !chapterName) return { mcqs: [], flashcards: [] };
+      return getChapterContent(topicSource, chapterName);
     },
-    enabled: !!chapterId,
+    enabled: !!topicSource && !!chapterName, // Only run when both params are available
     staleTime: 1000 * 60 * 5,
     gcTime: 1000 * 60 * 60 * 24,
     refetchOnWindowFocus: false,

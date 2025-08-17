@@ -1,3 +1,4 @@
+// frontend/src/App.tsx
 import React, { Suspense } from "react";
 import {
   BrowserRouter as Router,
@@ -10,7 +11,7 @@ import {
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { DataProvider } from "./contexts/DataContext";
 import { ToastProvider } from "./components/Toast";
-import Header from "./components/Header";
+import Header from "./components/Header"; // Assuming Header.tsx exists and is correctly implemented
 import BottomNav from "./components/BottomNav";
 import AdminRoute from "./components/AdminRoute";
 import Loader from "./components/Loader";

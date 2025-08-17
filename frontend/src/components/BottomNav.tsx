@@ -1,3 +1,4 @@
+// frontend/src/components/BottomNav.tsx
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { HomeIcon, BookOpenIcon, ChartBarIcon, CogIcon } from '@heroicons/react/24/outline';
