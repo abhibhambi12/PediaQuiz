@@ -1,26 +1,19 @@
 {
-  "name": "pediaquiz-monorepo",
-  "version": "1.0.0",
+  "name": "pediaquiz",
   "private": true,
-  "engines": {
-    "node": ">=20.0.0",
-    "npm": ">=9.0.0"
-  },
   "workspaces": [
-    "workspaces/frontend",
-    "workspaces/functions",
-    "workspaces/types"
+    "frontend",
+    "functions",
+    "packages/types"
   ],
   "scripts": {
-    "build": "npm run build --workspace=@pediaquiz/types && npm run build --workspace=@pediaquiz/functions && npm run build --workspace=@pediaquiz/frontend",
-    "dev": "npm run dev --workspace=@pediaquiz/frontend",
-    "clean": "npm cache clean --force && rm -rf node_modules package-lock.json && find ./workspaces -name 'node_modules' -type d -exec rm -rf {} + && find ./workspaces -name 'package-lock.json' -type f -delete",
+    "build": "npm run build --workspaces --if-present",
+    "build:functions": "npm run build --workspace=functions",
+    "dev": "npm run dev --workspace=frontend",
+    "clean": "rm -rf node_modules && find . -name 'node_modules' -type d -prune -exec rm -rf '{}' + && find . -name 'package-lock.json' -type f -delete && npm cache clean --force",
     "firebase": "firebase",
     "deploy": "firebase deploy",
-    "deploy:functions": "npm run build --workspace=@pediaquiz/functions && firebase deploy --only functions",
-    "deploy:all": "npm run build && firebase deploy",
-    "deploy:hosting": "npm run build --workspace=@pediaquiz/frontend && firebase deploy --only hosting",
-    "emulate": "firebase emulators:start"
+    "deploy:functions": "bash ./deploy-functions.sh"
   },
   "devDependencies": {
     "firebase-tools": "^13.13.2",

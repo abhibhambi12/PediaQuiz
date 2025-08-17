@@ -1,11 +1,15 @@
 {
   "files": [],
   "references": [
-    { "path": "./workspaces/types" },
-    { "path": "./workspaces/functions" },
-    { "path": "./workspaces/frontend" }
+    { "path": "./packages/types" },
+    { "path": "./functions" },
+    { "path": "./frontend" }
   ],
   "compilerOptions": {
-    "baseUrl": "."
+    "composite": true,
+    "declaration": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "noEmit": true
   }
 }

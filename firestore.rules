@@ -2,72 +2,79 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    match /{document=**} {
-      allow read, write: if false;
-    }
-    
-    function isAdmin() {
-      return request.auth != null && request.auth.token.isAdmin == true;
+
+    function isAdmin(userId) {
+      return get(/databases/$(database)/documents/users/$(userId)).data.isAdmin == true;
     }
 
-    function canReadContent() {
-      return request.auth != null;
-    }
-    
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow get: if request.auth != null && isAdmin(request.auth.uid);
     }
 
-    match /users/{userId}/attemptedMCQs/{docId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-    match /users/{userId}/attemptedFlashcards/{docId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-    match /users/{userId}/quizResults/{docId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+    match /contentGenerationJobs/{jobId} {
+      // Allow read/write for the user who owns the job, or admin
+      allow read: if request.auth != null && (request.auth.uid == resource.data.userId || isAdmin(request.auth.uid));
+      // Allow create if authenticated and userId matches new resource data, or admin
+      allow create: if request.auth != null && (request.auth.uid == request.resource.data.userId || isAdmin(request.auth.uid));
+      // Allow updates/deletes only by admin for now, or the user who owns it IF the job is in a non-sensitive state.
+      // For simplicity, keeping write for admin or owner if it's 'error' or 'archived' for self-cleanup
+      allow update, delete: if request.auth != null && (isAdmin(request.auth.uid) || (request.auth.uid == resource.data.userId && resource.data.status in ['error', 'archived']));
     }
     
+    // Public read-only collections. All writes must be through backend functions
     match /Topics/{topicId} {
-      allow read: if canReadContent();
-      allow write: if isAdmin();
+      allow read: if request.auth != null;
+      allow write: if isAdmin(request.auth.uid); // Allow admin to write via console/functions
     }
     
     match /MarrowTopics/{topicId} {
-      allow read: if canReadContent();
-      allow write: if isAdmin();
+      allow read: if request.auth != null;
+      allow write: if isAdmin(request.auth.uid); // Allow admin to write via console/functions
     }
-    
+
     match /MasterMCQ/{mcqId} {
-      allow read: if canReadContent();
-      allow write: if isAdmin();
+      allow read: if request.auth != null;
+      allow write: if isAdmin(request.auth.uid); // Allow admin create/delete/update
     }
-    
+
     match /MarrowMCQ/{mcqId} {
-      allow read: if canReadContent();
-      allow write: if isAdmin();
+      allow read: if request.auth != null;
+      allow write: if isAdmin(request.auth.uid); // Allow admin create/delete/update
     }
-    
+
     match /Flashcards/{flashcardId} {
-      allow read: if canReadContent();
-      allow write: if isAdmin();
+      allow read: if request.auth != null;
+      allow write: if isAdmin(request.auth.uid); // Allow admin create/delete/update
     }
-    
+
     match /KeyClinicalTopics/{topicId} {
-      allow read: if canReadContent();
-      allow write: if isAdmin();
+      allow read: if request.auth != null;
+      allow write: if isAdmin(request.auth.uid); // Allow admin/functions to add new tags
     }
     
+    match /users/{userId}/quizResults/{quizResultId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    match /users/{userId}/attemptedMCQs/{attemptId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    match /users/{userId}/attemptedFlashcards/{attemptId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
     match /quizSessions/{sessionId} {
-      allow read, write, delete: if request.auth != null && request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow write: if request.auth != null && request.auth.uid == resource.data.userId;
     }
-    
-    match /userUploads/{uploadId} {
-      allow read: if isAdmin();
-      allow write: if isAdmin();
+
+    match /goals/{goalId} {
+      allow read, write: if request.auth != null && (
+        (request.auth.uid == resource.data.userId) || isAdmin(request.auth.uid)
+      );
     }
   }
 }

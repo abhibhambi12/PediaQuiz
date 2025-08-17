@@ -1,18 +1,10 @@
-## Prerequisites
+## Project Overview
 
-Before you begin, ensure you have the following installed and configured on your local machine:
+This project is a web application built with React, TypeScript, and Firebase, designed to provide an interactive platform for educational content, including quizzes, flashcards, and AI-generated study materials. The application leverages Firebase for authentication, Firestore for data storage, and Cloud Functions for backend logic.
 
-- **Node.js:** Version `20.x` or higher.
-- **npm:** Version `9.x` or higher (this comes bundled with Node.js 20).
-- **Firebase CLI:** Authenticated with your Google account.
+## Setup Instructions
 
-It is highly recommended to use a version manager like `nvm` to manage your Node.js versions. You can switch to the correct version by running:
-`nvm use 20`
-
-## Getting Started
-
-1.  **Clone the repository.**
-2.  **Install dependencies from the root directory:**
-    ```bash
-    npm install
-    ```
+1. **Clone the Repository**:
+   ```bash
+   git clone <repository-url>
+   cd <repository-name>
