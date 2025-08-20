@@ -1,4 +1,5 @@
 {
+  "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "target": "ESNext",
     "lib": [
@@ -15,24 +16,28 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "strict": true,
+    "baseUrl": "./", // CRITICAL FIX: Set baseUrl to current directory for paths to work
     "paths": {
+      // CRITICAL FIX: Path should be relative to baseUrl and point to src folder.
+      // The `*` matches everything under `src`
       "@/*": [
-        "./src/*"
+        "src/*"
       ]
     },
     "types": [
-      "vite/client"
+      "vite/client" // This is for Vite-specific environment variables and imports
     ]
   },
   "include": [
-    "src"
+    "src", // Include all files in the src directory
+    "src/types/**/*.d.ts" // Include custom declaration files like react-joyride.d.ts
   ],
   "references": [
     {
       "path": "./tsconfig.node.json"
     },
     {
-      "path": "../packages/types"
+      "path": "../packages/types" // Reference to the shared types workspace
     }
   ]
 }

@@ -1,6 +1,13 @@
+// frontend/src/hooks/usePersistentState.ts
 import { useState, useEffect, Dispatch, SetStateAction } from 'react';
 
-// Custom hook for managing state that persists in localStorage
+/**
+ * Custom hook for managing state that persists in localStorage.
+ * It's generic to work with any serializable type.
+ * @param key The key under which to store the value in localStorage.
+ * @param defaultValue The default value to use if no value is found in localStorage.
+ * @returns A tuple containing the state value and the state setter function.
+ */
 export function usePersistentState<T>(key: string, defaultValue: T): [T, Dispatch<SetStateAction<T>>] {
     // Initialize state from localStorage or use default value
     const [state, setState] = useState<T>(() => {

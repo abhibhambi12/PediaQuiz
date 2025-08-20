@@ -1,9 +1,15 @@
 {
   "files": [],
   "references": [
-    { "path": "./packages/types" },
-    { "path": "./functions" },
-    { "path": "./frontend" }
+    {
+      "path": "./packages/types"
+    },
+    {
+      "path": "./functions"
+    },
+    {
+      "path": "./frontend"
+    }
   ],
   "compilerOptions": {
     "composite": true,

@@ -2,3 +2,6 @@ lib/
 *.tsbuildinfo
 node_modules/
 *.local
+.env
+jest.config.js
+coverage/

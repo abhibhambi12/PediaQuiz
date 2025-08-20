@@ -1,5 +1,6 @@
+// frontend/src/components/AdminRoute.tsx
 import React from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/AuthContext'; // Explicit import of useAuth
 import { Navigate } from 'react-router-dom';
 import Loader from './Loader';
 
@@ -15,7 +16,6 @@ const AdminRoute: React.FC<AdminRouteProps> = ({ children }) => {
     }
 
     if (!user || !user.isAdmin) {
-        // Redirect non-admins to the home page
         return <Navigate to="/" replace />;
     }
 

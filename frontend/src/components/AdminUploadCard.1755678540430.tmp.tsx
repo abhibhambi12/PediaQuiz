@@ -370,15 +370,15 @@ const AdminUploadCard: React.FC<{ job: ContentGenerationJob; allTopics: Topic[] 
                         {/* "Generate Chapter Summary" button - available if source text exists and job is completed/final review */}
                         {job.sourceText && job.sourceText.length >= 100 &&
                             (['completed', 'pending_final_review', 'pending_assignment_review'].includes(job.status) ||
-                                (job.pipeline === 'marrow' && job.status === 'pending_assignment')) && ( // Marrow also has approved topic/chapter at pending_assignment
-                                <button
-                                    className="btn-secondary"
-                                    onClick={handleGenerateSummary}
-                                    disabled={generateChapterSummaryMutation.isPending}
-                                >
-                                    {generateChapterSummaryMutation.isPending ? "Generating Summary..." : "✨ Generate Chapter Summary"}
-                                </button>
-                            )}
+                             (job.pipeline === 'marrow' && job.status === 'pending_assignment')) && ( // Marrow also has approved topic/chapter at pending_assignment
+                            <button
+                                className="btn-secondary"
+                                onClick={handleGenerateSummary}
+                                disabled={generateChapterSummaryMutation.isPending}
+                            >
+                                {generateChapterSummaryMutation.isPending ? "Generating Summary..." : "✨ Generate Chapter Summary"}
+                            </button>
+                        )}
                     </>
                 )}
             </div>

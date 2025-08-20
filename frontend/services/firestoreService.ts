@@ -12,21 +12,18 @@ import {
     QueryDocumentSnapshot,
 } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
-// Using direct type imports from types package
-import {
+import type {
     Topic,
     Chapter,
     MCQ,
     Flashcard,
     UserUpload,
     CreateCustomTestCallableData,
-    UpdateChapterNotesCallableData,
     SearchContentCallableData,
 } from '@pediaquiz/types';
 import { normalizeId } from '@/utils/helpers';
 
-// Callable Function references
-const updateChapterNotesFn = httpsCallable<UpdateChapterNotesCallableData, { success: boolean, message: string }>(functions, 'updateChapterNotes');
+// Callable Function references (kept here as they interact directly with Firestore entities like Topics)
 const createCustomTestFn = httpsCallable<CreateCustomTestCallableData, { success: boolean, testId: string, questions: string[] }>(functions, 'createCustomTest');
 const searchContentFn = httpsCallable<SearchContentCallableData, { mcqs: MCQ[], flashcards: Flashcard[] }>(functions, 'searchContent');
 
@@ -38,16 +35,15 @@ export const getTopics = async (): Promise<Topic[]> => {
     try {
         // Fetch all approved MCQs and Flashcards to accurately count them per chapter/topic.
         // This is necessary because counts are not automatically aggregated in topic/chapter docs.
-        // NOTE: Commented out to align with appData refactor where topic/chapter counts are assumed to be
-        // already on the Topic/Chapter document themselves, not derived client-side here.
-        // If counts are NOT stored on topic/chapter docs, this logic needs to be re-enabled
-        // or a backend aggregation function is needed.
-        /*
         const [
+            generalTopicSnapshot,
+            marrowTopicSnapshot,
             masterMcqSnapshot,
             marrowMcqSnapshot,
             flashcardSnapshot,
         ] = await Promise.all([
+            getDocs(collection(db, "Topics")),
+            getDocs(collection(db, "MarrowTopics")),
             getDocs(query(collection(db, "MasterMCQ"), where('status', '==', 'approved'))),
             getDocs(query(collection(db, "MarrowMCQ"), where('status', '==', 'approved'))),
             getDocs(query(collection(db, "Flashcards"), where('status', '==', 'approved'))),
@@ -75,35 +71,25 @@ export const getTopics = async (): Promise<Topic[]> => {
             const key = `${topicId}_${chapterId}`;
             flashcardCounts.set(key, (flashcardCounts.get(key) || 0) + 1);
         });
-        */
-
-        const [
-            generalTopicSnapshot,
-            marrowTopicSnapshot,
-        ] = await Promise.all([
-            getDocs(collection(db, "Topics")),
-            getDocs(collection(db, "MarrowTopics")),
-        ]);
 
         const allTopics: Topic[] = [];
 
         // Process General Topics: Chapters are strings, summaryNotes are in subcollection
         generalTopicSnapshot.forEach(docSnap => {
             const data = docSnap.data();
-            const topicId = docSnap.id; // Use doc.id directly, assuming it's already normalized or handled elsewhere.
+            const topicId = normalizeId(docSnap.id);
             const topicName = data.name || 'Unnamed Topic';
 
             const chapters: Chapter[] = (data.chapters || [])
                 .filter((ch: any) => typeof ch === 'string' && ch)
                 .map((chapterName: string): Chapter => {
                     const chapterId = normalizeId(chapterName);
-                    // Use counts directly from topic document if available, otherwise 0
-                    // No client-side recalculation from content needed if topic docs are authoritative
+                    const countKey = `${topicId}_${chapterId}`;
                     return {
                         id: chapterId,
                         name: chapterName,
-                        mcqCount: 0, // Placeholder, actual counts should come from topic doc or be aggregated by function
-                        flashcardCount: 0, // Placeholder
+                        mcqCount: mcqCounts.get(countKey) || 0,
+                        flashcardCount: flashcardCounts.get(countKey) || 0,
                         topicId: topicId,
                         source: 'General',
                         topicName: topicName,
@@ -117,8 +103,8 @@ export const getTopics = async (): Promise<Topic[]> => {
                 name: topicName,
                 chapters: chapters,
                 chapterCount: chapters.length,
-                totalMcqCount: data.totalMcqCount || 0, // Use counts from document directly
-                totalFlashcardCount: data.totalFlashcardCount || 0, // Use counts from document directly
+                totalMcqCount: chapters.reduce((sum, ch) => sum + ch.mcqCount, 0),
+                totalFlashcardCount: chapters.reduce((sum, ch) => sum + ch.flashcardCount, 0),
                 source: 'General',
             } as Topic);
         });
@@ -126,19 +112,20 @@ export const getTopics = async (): Promise<Topic[]> => {
         // Process Marrow Topics: Chapters are objects, summaryNotes are embedded
         marrowTopicSnapshot.forEach(docSnap => {
             const data = docSnap.data();
-            const topicId = docSnap.id; // Use doc.id directly, assuming it's already normalized or handled elsewhere.
+            const topicId = normalizeId(docSnap.id);
             const topicName = data.name || 'Unnamed Topic';
 
             const chapters: Chapter[] = (data.chapters || [])
                 .filter((ch: any) => ch && typeof ch === 'object' && ch.name)
                 .map((chData: any): Chapter => {
                     const chapterId = normalizeId(chData.name); // Normalize name to get ID from Marrow chapter object
+                    const countKey = `${topicId}_${chapterId}`;
                     return {
                         ...chData, // Retain existing properties like summaryNotes, sourceUploadIds
                         id: chapterId,
                         name: chData.name,
-                        mcqCount: chData.mcqCount || 0, // Use counts from sub-object directly
-                        flashcardCount: chData.flashcardCount || 0, // Use counts from sub-object directly
+                        mcqCount: mcqCounts.get(countKey) || 0, // Recalculate from fetched data
+                        flashcardCount: flashcardCounts.get(countKey) || 0, // Recalculate from fetched data
                         topicId: topicId,
                         source: 'Marrow',
                         topicName: topicName,
@@ -152,8 +139,8 @@ export const getTopics = async (): Promise<Topic[]> => {
                 name: topicName,
                 chapters: chapters,
                 chapterCount: chapters.length,
-                totalMcqCount: data.totalMcqCount || 0, // Use counts from document directly
-                totalFlashcardCount: data.totalFlashcardCount || 0, // Use counts from document directly
+                totalMcqCount: chapters.reduce((sum, ch) => sum + ch.mcqCount, 0),
+                totalFlashcardCount: chapters.reduce((sum, ch) => sum + ch.flashcardCount, 0),
                 source: 'Marrow',
             } as Topic);
         });
@@ -302,9 +289,4 @@ export const getQuestions = async (collectionName: 'MasterMCQ' | 'MarrowMCQ'): P
 
 export const createCustomTest = async (data: CreateCustomTestCallableData) => {
     return await createCustomTestFn(data);
-};
-
-// Export updateChapterNotes callable for use in frontend (e.g., ChapterNotesEditPage)
-export const updateChapterNotes = async (data: UpdateChapterNotesCallableData) => {
-    return await updateChapterNotesFn(data);
 };

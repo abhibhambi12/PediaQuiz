@@ -1,22 +1,28 @@
 {
-  "name": "pediaquiz",
+  "name": "pediaquiz-monorepo",
   "private": true,
+  "version": "1.0.0",
   "workspaces": [
     "frontend",
     "functions",
     "packages/types"
   ],
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
-    "build:functions": "npm run build --workspace=functions",
     "dev": "npm run dev --workspace=frontend",
-    "clean": "rm -rf node_modules && find . -name 'node_modules' -type d -prune -exec rm -rf '{}' + && find . -name 'package-lock.json' -type f -delete && npm cache clean --force",
-    "firebase": "firebase",
-    "deploy": "firebase deploy",
-    "deploy:functions": "bash ./deploy-functions.sh"
+    "build:types": "npm run build --workspace=@pediaquiz/types",
+    "build:functions": "npm run build --workspace=@pediaquiz/functions",
+    "build:frontend": "npm run build --workspace=frontend",
+    "build": "npm run build:types && npm run build:functions && npm run build:frontend",
+    "setup:local": "npm install && npm run build",
+    "clean": "rm -rf node_modules && find . -name 'node_modules' -type d -prune -exec rm -rf '{}' + && find . -name 'package-lock.json' -type f -delete && find . -name 'lib' -type d -prune -exec rm -rf '{}' + && find . -name 'dist' -type d -prune -exec rm -rf '{}' + && find . -name '*.tsbuildinfo' -type f -delete && find . -name '*.tgz' -type f -delete && npm cache clean --force",
+    "deploy:functions": "bash ./deploy-functions.sh",
+    "deploy": "firebase deploy"
   },
   "devDependencies": {
     "firebase-tools": "^13.13.2",
     "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": "20"
   }
 }

@@ -2,79 +2,103 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    function isAdmin(userId) {
-      return get(/databases/$(database)/documents/users/$(userId)).data.isAdmin == true;
-    }
-
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      allow get: if request.auth != null && isAdmin(request.auth.uid);
-    }
-
-    match /contentGenerationJobs/{jobId} {
-      // Allow read/write for the user who owns the job, or admin
-      allow read: if request.auth != null && (request.auth.uid == resource.data.userId || isAdmin(request.auth.uid));
-      // Allow create if authenticated and userId matches new resource data, or admin
-      allow create: if request.auth != null && (request.auth.uid == request.resource.data.userId || isAdmin(request.auth.uid));
-      // Allow updates/deletes only by admin for now, or the user who owns it IF the job is in a non-sensitive state.
-      // For simplicity, keeping write for admin or owner if it's 'error' or 'archived' for self-cleanup
-      allow update, delete: if request.auth != null && (isAdmin(request.auth.uid) || (request.auth.uid == resource.data.userId && resource.data.status in ['error', 'archived']));
+    
+    // Default: Deny all access
+    match /{document=**} {
+      allow read, write: if false;
     }
     
-    // Public read-only collections. All writes must be through backend functions
+    // --- Helper Functions ---
+    // Function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    // Function to check if user is an administrator
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.isAdmin == true;
+    }
+
+    // --- User Data Collection ---
+    // Users can read and write to their own profile document and its subcollections (e.g., attemptedMCQs, attemptedFlashcards, goals).
+    match /users/{userId} {
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+    }
+    // Explicitly allow subcollection access
+    match /users/{userId}/{collectionId}/{document=**} {
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // --- Content Collections (Public Read, Admin Write) ---
+    // All authenticated users can read main content collections.
+    // Only administrators can create, update, or delete content.
     match /Topics/{topicId} {
-      allow read: if request.auth != null;
-      allow write: if isAdmin(request.auth.uid); // Allow admin to write via console/functions
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    // Chapter notes are stored in a subcollection for General topics
+    match /Topics/{topicId}/ChapterNotes/{chapterId} {
+      allow read: if isAuthenticated(); // All authenticated can read notes
+      allow write: if isAdmin();        // Only admins can write/update notes
     }
     
     match /MarrowTopics/{topicId} {
-      allow read: if request.auth != null;
-      allow write: if isAdmin(request.auth.uid); // Allow admin to write via console/functions
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
     }
-
+    
     match /MasterMCQ/{mcqId} {
-      allow read: if request.auth != null;
-      allow write: if isAdmin(request.auth.uid); // Allow admin create/delete/update
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
     }
-
+    
     match /MarrowMCQ/{mcqId} {
-      allow read: if request.auth != null;
-      allow write: if isAdmin(request.auth.uid); // Allow admin create/delete/update
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
     }
-
+    
     match /Flashcards/{flashcardId} {
-      allow read: if request.auth != null;
-      allow write: if isAdmin(request.auth.uid); // Allow admin create/delete/update
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
     }
-
+    
     match /KeyClinicalTopics/{topicId} {
-      allow read: if request.auth != null;
-      allow write: if isAdmin(request.auth.uid); // Allow admin/functions to add new tags
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
     }
     
-    match /users/{userId}/quizResults/{quizResultId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow write: if request.auth != null && request.auth.uid == userId;
+    // --- Application Data Collections ---
+    // Quiz results: A user can create their own result, and only read their own results.
+    // Ensure that `userId` in the new document matches the authenticated user's UID.
+    match /quizResults/{resultId} {
+      allow read: if isAuthenticated() && request.auth.uid == resource.data.userId;
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      // No updates or deletes allowed from client for quiz results (immutable once created)
     }
     
-    match /users/{userId}/attemptedMCQs/{attemptId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-
-    match /users/{userId}/attemptedFlashcards/{attemptId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-
+    // Temporary quiz sessions: Can only be accessed by the user who created them.
+    // They are primarily managed by backend functions.
     match /quizSessions/{sessionId} {
-      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
-      allow write: if request.auth != null && request.auth.uid == resource.data.userId;
+      allow read, write: if isAuthenticated() && request.auth.uid == resource.data.userId;
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      // Delete is also managed by backend (e.g., on session expiry or finish)
     }
 
-    match /goals/{goalId} {
-      allow read, write: if request.auth != null && (
-        (request.auth.uid == resource.data.userId) || isAdmin(request.auth.uid)
-      );
+    // Custom tests: Can only be read/written by the user who created them.
+    match /customTests/{testId} {
+      allow read: if isAuthenticated() && request.auth.uid == resource.data.userId;
+      allow write: if isAuthenticated() && request.auth.uid == request.resource.data.userId;
+    }
+    
+    // Admin-only userUploads collection: For content generation jobs.
+    // Only administrators can read or write to this collection.
+    match /userUploads/{uploadId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Logs: This collection is written to by functions, and read by the owning user.
+    match /logs/{logId} {
+      allow read: if isAuthenticated() && request.auth.uid == resource.data.userId;
+      allow write: if false; // Only functions should write to logs
     }
   }
 }

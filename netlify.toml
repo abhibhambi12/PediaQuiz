@@ -3,10 +3,12 @@
   base = "/"
   # The publish directory for the final build artifacts.
   publish = "frontend/dist"
-  # This command ensures the shared types are built before the frontend.
+  # This simplified command leverages npm workspaces for dependency installation
+  # and then runs the top-level build script.
   command = "npm install && npm run build"
 
 [build.environment]
+  # Specify the Node.js version to match your local and Firebase environments.
   NODE_VERSION = "20"
 
 # Rewrite rule for the Single-Page Application.

@@ -1,14 +1,11 @@
-// frontend/src/services/aiService.ts
 // MODIFIED: Updated callable function definitions to match new types and added new callables
 //          for gamification features (e.g., Daily Goal, Quick Fire, Theme).
-//          Moved createCustomTest to firestoreService.ts.
 //          CRITICAL: Re-enabled processManualTextInput as requested.
 //          Added new callable wrappers for approved features.
 
 import { httpsCallable, HttpsCallableResult } from 'firebase/functions';
 import { functions } from '@/firebase';
-// Removed 'type' prefix to allow direct import and usage as values (e.g., in httpsCallable)
-import {
+import type {
     ChatMessage,
     MCQ,
     QuizResult,
@@ -49,7 +46,7 @@ import {
     AutoAssignContentCallableData,
     UpdateChapterNotesCallableData,
     GetExpandedSearchTermsCallableData,
-    GoalInput, // FIX: Import GoalInput
+    GoalInput,
     GenerateCramSheetCallableData, // NEW: For Cram Sheets
     GetDailyGrindPlaylistCallableData, // NEW: For Daily Grind
     GetMockExamQuestionsCallableData, // NEW: For Mock Exam
@@ -60,7 +57,6 @@ import {
 // Centralized callable function references (prefixed with _ for internal use)
 const _chatWithAssistant = httpsCallable<ChatWithAssistantCallableData, { response: string }>(functions, 'chatWithAssistant');
 const _generatePerformanceAdvice = httpsCallable<GeneratePerformanceAdviceCallableData, { advice: string }>(functions, 'generatePerformanceAdvice');
-// Added difficulty to Pick<MCQ> for generateWeaknessBasedTestCallableData
 const _generateWeaknessBasedTest = httpsCallable<{ allMcqs: Pick<MCQ, 'id' | 'topicId' | 'chapterId' | 'source' | 'tags' | 'difficulty'>[], testSize: number }, { mcqIds: string[] }>(functions, 'generateWeaknessBasedTest');
 const _getDailyWarmupQuiz = httpsCallable<void, { mcqIds: string[] }>(functions, 'getDailyWarmupQuiz');
 const _getQuizSessionFeedback = httpsCallable<GetQuizSessionFeedbackCallableData, { feedback: string }>(functions, 'getQuizSessionFeedback');
@@ -111,7 +107,6 @@ export const generatePerformanceAdvice = async (data: GeneratePerformanceAdviceC
 };
 
 // Quiz & Session Generation
-// Updated type of allMcqs to include 'difficulty'
 export const generateWeaknessBasedTest = async (data: { allMcqs: Pick<MCQ, 'id' | 'topicId' | 'chapterId' | 'source' | 'tags' | 'difficulty'>[], testSize: number }): Promise<HttpsCallableResult<{ mcqIds: string[] }>> => {
     return _generateWeaknessBasedTest(data);
 };
@@ -132,7 +127,6 @@ export const getHint = async (data: { mcqId: string }): Promise<HttpsCallableRes
     return _getHint(data);
 };
 
-// Explicitly export evaluateFreeTextAnswer
 export const evaluateFreeTextAnswer = async (data: { mcqId: string, userAnswer: string }): Promise<HttpsCallableResult<{ isCorrect: boolean, feedback: string }>> => {
     return _evaluateFreeTextAnswer(data);
 };
@@ -223,7 +217,6 @@ export const generateCramSheet = async (data: GenerateCramSheetCallableData): Pr
     return _generateCramSheet(data);
 };
 
-// Export getDailyGrindPlaylist
 export const getDailyGrindPlaylist = async (data: GetDailyGrindPlaylistCallableData): Promise<HttpsCallableResult<{ mcqIds: string[], flashcardIds: string[] }>> => {
     return _getDailyGrindPlaylist(data);
 };

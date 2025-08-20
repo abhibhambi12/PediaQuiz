@@ -1,44 +1,52 @@
-import React, { useEffect, useState } from 'react';
+// frontend/src/pages/TagsPage.tsx
+import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { getTags } from '../services/firestoreService'; // Assuming firestoreService exports getTags
+import { useQuery } from '@tanstack/react-query';
+import { getTags } from '../services/firestoreService';
+import Loader from '@/components/Loader';
+import { useToast } from '@/components/Toast';
 
 const TagsPage: React.FC = () => {
-    // State to hold the list of tags
-    const [tags, setTags] = useState<string[]>([]);
+    const { addToast } = useToast();
 
-    // Effect to fetch tags when the component mounts
+    const { data: tags, isLoading, error } = useQuery<string[], Error>({
+        queryKey: ['allTags'],
+        queryFn: getTags,
+        staleTime: 1000 * 60 * 60,
+        refetchOnWindowFocus: false,
+    });
+
     useEffect(() => {
-        getTags()
-            .then(fetchedTags => {
-                // Ensure fetchedTags is an array, default to empty if not
-                setTags(Array.isArray(fetchedTags) ? fetchedTags : []);
-            })
-            .catch(error => {
-                console.error("Error fetching tags:", error);
-                setTags([]); // Ensure tags state is empty on error
-            });
-    }, []); // Empty dependency array means this effect runs only once on mount
+        if (error) {
+            addToast(`Failed to load tags: ${error.message}`, "error");
+        }
+    }, [error, addToast]);
+
+    if (isLoading) {
+        return <Loader message="Loading tags..." />;
+    }
+
+    if (error) {
+        return <div className="p-6 text-center text-red-500">Error loading tags.</div>;
+    }
 
     return (
-        <div className="p-6">
-            <h1 className="text-2xl font-bold mb-4">Tags</h1>
-            {/* Display message if no tags are found */}
-            {tags.length === 0 ? (
-                <p>No tags available.</p>
+        <div className="p-6 max-w-4xl mx-auto">
+            <h1 className="text-3xl font-bold mb-6 text-slate-800 dark:text-slate-50">Explore Content by Tags</h1>
+            {tags && tags.length === 0 ? (
+                <p className="text-slate-500 dark:text-slate-400">No tags available yet.</p>
             ) : (
-                // List of tags, each linking to questions filtered by that tag
-                <ul className="space-y-2">
-                    {tags.map((tag) => (
-                        <li key={tag} className="p-2 border-b border-gray-200 dark:border-gray-700">
-                            <Link
-                                to={`/tags/${tag}`} // Link to the route showing questions for this tag
-                                className="text-sky-600 dark:text-sky-400 hover:underline font-medium"
-                            >
-                                {tag}
-                            </Link>
-                        </li>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    {tags?.map((tag) => (
+                        <Link
+                            key={tag}
+                            to={`/tags/${encodeURIComponent(tag)}`} // Encode tag names for URL safety
+                            className="card-base p-4 flex items-center justify-center text-center font-medium text-lg bg-sky-50 dark:bg-sky-950/20 text-sky-800 dark:text-sky-300 hover:bg-sky-100 dark:hover:bg-sky-900 transition-colors duration-150 rounded-lg shadow-sm"
+                        >
+                            {tag}
+                        </Link>
                     ))}
-                </ul>
+                </div>
             )}
         </div>
     );

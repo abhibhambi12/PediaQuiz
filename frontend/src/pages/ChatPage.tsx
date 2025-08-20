@@ -1,5 +1,6 @@
+// frontend/src/pages/ChatPage.tsx
 import React, { useState, useEffect } from 'react';
-import { sendMessageToAI } from '../services/aiService'; // Assuming this service function exists
+import { chatWithAssistant } from '../services/aiService'; // Assuming this service function exists
 import { useAuth } from '@/contexts/AuthContext'; // To get user info if needed for context
 import { ChatMessage } from '@pediaquiz/types'; // Import ChatMessage type
 import { useToast } from '@/components/Toast'; // For user feedback
@@ -38,12 +39,13 @@ const ChatPage: React.FC = () => {
 
     try {
       // Send message to AI service
-      const aiResponse = await sendMessageToAI(trimmedInput);
+      // Pass history to AI for context
+      const aiResponse = await chatWithAssistant({ prompt: trimmedInput, history: messages });
 
       // Add AI response to the chat
       const aiMessage: ChatMessage = {
         id: Date.now().toString() + '_ai', // Another simple unique ID
-        text: aiResponse || "I couldn't generate a response. Please try again.",
+        text: aiResponse.data.response || "I couldn't generate a response. Please try again.",
         sender: 'assistant',
         timestamp: new Date(),
       };

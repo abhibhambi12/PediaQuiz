@@ -5,7 +5,7 @@
     "declaration": true,
     "outDir": "lib",
     "rootDir": "src",
-    "module": "CommonJS",
+    "module": "CommonJS", // Should compile to CommonJS for broad compatibility
     "moduleResolution": "node"
   },
   "include": [

@@ -1,3 +1,6 @@
+// frontend/src/components/QuizTimerBar.tsx
+// CRITICAL FIX: Corrected imports and improved structure.
+
 import React, { useState, useEffect } from 'react';
 
 interface QuizTimerBarProps {
@@ -7,56 +10,57 @@ interface QuizTimerBarProps {
 }
 
 const QuizTimerBar: React.FC<QuizTimerBarProps> = ({ duration, onTimeUp, isPaused }) => {
-    // State to keep track of the time remaining
     const [timeLeft, setTimeLeft] = useState(duration);
 
-    // Reset timer when duration prop changes
     useEffect(() => {
-        setTimeLeft(duration);
+        // Reset timeLeft if duration changes (e.g., new question)
+        setTimeLeft(Math.max(0, duration));
     }, [duration]);
 
-    // Timer logic effect
     useEffect(() => {
-        // If paused or time is up, stop the interval
         if (isPaused || timeLeft <= 0) {
             if (timeLeft <= 0) {
-                onTimeUp(); // Trigger the callback if time is up
+                // If time runs out, call onTimeUp. Ensure it's not called repeatedly.
+                onTimeUp();
             }
-            return; // Exit if paused or time's up
+            return; // Stop timer if paused or time is up
         }
 
-        // Set up an interval to decrement timeLeft every second
         const intervalId = setInterval(() => {
-            setTimeLeft(prevTime => (prevTime > 0 ? prevTime - 1 : 0));
+            setTimeLeft(prevTime => {
+                if (prevTime > 0) {
+                    return prevTime - 1;
+                } else {
+                    return 0; // Ensure it doesn't go negative
+                }
+            });
         }, 1000);
 
-        // Cleanup function to clear the interval when the component unmounts or dependencies change
+        // Cleanup interval on component unmount or dependencies change
         return () => clearInterval(intervalId);
-    }, [timeLeft, isPaused, onTimeUp]); // Dependencies: rerun effect if timeLeft, isPaused, or onTimeUp changes
+    }, [timeLeft, isPaused, onTimeUp]); // Re-run effect if timeLeft, isPaused, or onTimeUp changes
 
-    // Calculate the percentage of time remaining for the progress bar
+    // Calculate percentage for width, ensuring it's not negative
     const percentage = duration > 0 ? (timeLeft / duration) * 100 : 0;
 
-    // Determine the color class based on the percentage
-    let colorClass = 'bg-green-500'; // Default: Green
+    // Determine color class based on remaining time percentage
+    let colorClass = 'bg-green-500';
     if (percentage <= 50 && percentage > 25) {
-        colorClass = 'bg-amber-500'; // Yellow/Amber for 25-50%
+        colorClass = 'bg-amber-500';
     } else if (percentage <= 25) {
-        colorClass = 'bg-red-500'; // Red for 0-25%
+        colorClass = 'bg-red-500';
     }
 
     return (
-        // Container for the timer bar
         <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 my-4">
-            {/* Progress bar fill */}
             <div
-                className={`${colorClass} h-2.5 rounded-full transition-all duration-1000 ease-linear`} // Use ease-linear for smoother visual update
+                className={`${colorClass} h-2.5 rounded-full transition-all duration-1000 ease-linear`}
                 style={{ width: `${percentage}%` }}
-                role="progressbar" // ARIA role for progress bar
-                aria-valuenow={100 - percentage} // Indicate remaining progress
+                role="progressbar"
+                aria-valuenow={percentage}
                 aria-valuemin={0}
                 aria-valuemax={100}
-                aria-label={`Time remaining: ${Math.ceil(timeLeft / 60)} minutes`} // More descriptive label
+                aria-label={`Time remaining: ${Math.floor(timeLeft / 60)} minutes and ${timeLeft % 60} seconds`}
             ></div>
         </div>
     );

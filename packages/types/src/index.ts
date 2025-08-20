@@ -1,18 +1,29 @@
+// packages/types/src/index.ts
+// Changed 'import type' to 'import' for FieldValue because it's used as a value (e.g., FieldValue.serverTimestamp()).
+import { FieldValue } from 'firebase-admin/firestore';
+
+// --- USER & AUTH ---
 export interface User {
     uid: string;
     email: string | null;
     displayName: string | null;
     isAdmin: boolean;
-    createdAt: Date;
-    lastLogin: Date;
-    bookmarks?: string[];
-    currentStreak?: number;
-    lastStudiedDate?: Date;
+    createdAt: Date | FieldValue;
+    lastLogin: Date | FieldValue;
     bookmarkedMcqs?: string[];
     bookmarkedFlashcards?: string[];
     activeSessionId?: string;
+    currentStreak?: number;
+    lastStudiedDate?: Date | FieldValue | null;
+    xp?: number;
+    level?: number;
+    theme?: string;
+    badges?: string[];
 }
 
+export type PediaquizUserType = User;
+
+// --- CONTENT STRUCTURE ---
 export interface Chapter {
     id: string;
     name: string;
@@ -22,81 +33,93 @@ export interface Chapter {
     sourceUploadIds?: string[];
     originalTextRefIds?: string[];
     summaryNotes?: string | null;
-    source?: 'General' | 'Marrow';
-    topicName?: string;
+    source: 'General' | 'Marrow';
+    topicName: string;
+    createdAt?: Date | FieldValue;
+    updatedAt?: Date | FieldValue;
 }
 
 export interface Topic {
     id: string;
     name: string;
-    chapters: Chapter[];
+    chapters: Chapter[] | string[];
     chapterCount: number;
     totalMcqCount: number;
     totalFlashcardCount: number;
-    source?: 'General' | 'Marrow';
+    source: 'General' | 'Marrow';
+    createdAt?: Date | FieldValue;
+    updatedAt?: Date | FieldValue;
 }
 
 export type PediaquizTopicType = Topic;
-export type PediaquizUserType = User;
-
 export type ContentStatus = 'pending' | 'approved' | 'rejected' | 'archived';
 
+// --- CORE CONTENT TYPES ---
 export interface MCQ {
     id: string;
     question: string;
     options: string[];
+    answer: string;
     correctAnswer: string;
     explanation?: string;
-    topic?: string;
+    topicName: string;
     topicId: string;
-    chapter?: string;
+    chapterName: string;
     chapterId: string;
     creatorId?: string;
-    createdAt?: Date;
-    source?: 'Marrow' | 'PediaQuiz' | 'Master' | 'AI_Generated_Chat' | 'AI_Generated' | 'Marrow_AI_Generated' | 'PediaQuiz_AI_Generated';
+    createdAt?: Date | FieldValue;
+    source?: 'Marrow_Extracted' | 'Marrow_AI_Generated' | 'AI_Generated' | 'AI_Generated_From_MCQ' | 'PediaQuiz' | 'Master';
     status: ContentStatus;
     uploadId?: string;
     tags?: string[];
-    topicName?: string;
-    chapterName?: string;
+    difficulty?: 'easy' | 'medium' | 'hard';
+    type: 'mcq';
 }
 
 export interface Flashcard {
     id: string;
     front: string;
     back: string;
-    topic?: string;
-    chapter?: string;
+    topicName: string;
     topicId: string;
+    chapterName: string;
     chapterId: string;
     creatorId?: string;
-    createdAt?: Date;
-    source?: 'Marrow' | 'PediaQuiz' | 'Master' | 'AI_Generated' | string;
-    status?: ContentStatus;
+    createdAt?: Date | FieldValue;
+    source?: 'AI_Generated' | 'AI_Generated_From_MCQ' | 'Marrow' | 'PediaQuiz' | 'Master';
+    status: ContentStatus;
     uploadId?: string;
-    topicName?: string;
-    chapterName?: string;
     tags?: string[];
+    mnemonic?: string;
+    type: 'flashcard';
 }
 
-export interface LabValue {
+// --- USER PROGRESS & SESSIONS ---
+export interface QuizSession {
     id: string;
-    parameter: string;
-    category: string;
-    value: string;
-    unit: string;
-    source?: string;
+    userId: string;
+    mode: 'practice' | 'quiz' | 'custom' | 'weakness' | 'incorrect' | 'mock' | 'review_due' | 'warmup' | 'quick_fire' | 'daily_grind' | 'ddx_game'; // Added new modes
+    mcqIds: string[];
+    // Added flashcardIds to QuizSession for mixed sessions
+    flashcardIds?: string[];
+    currentIndex: number;
+    answers: Record<number, string | null>;
+    markedForReview: number[];
+    isFinished: boolean;
+    createdAt: Date | FieldValue;
+    expiresAt: Date | FieldValue;
+    updatedAt?: Date | FieldValue;
 }
 
 export interface QuizResult {
     id: string;
     userId: string;
-    sessionId: string;
-    mode: string;
-    quizDate: Date;
+    sessionId?: string;
+    mode: 'practice' | 'quiz' | 'custom' | 'weakness' | 'incorrect' | 'mock' | 'review_due' | 'warmup' | 'quick_fire' | 'daily_grind' | 'ddx_game'; // Added new modes
+    quizDate: Date | FieldValue;
     totalQuestions: number;
     score: number;
-    durationSeconds: number;
+    durationSeconds?: number;
     topicIds?: string[];
     chapterIds?: string[];
     mcqAttempts: {
@@ -105,189 +128,217 @@ export interface QuizResult {
         correctAnswer: string;
         isCorrect: boolean;
     }[];
+    xpEarned?: number;
+    streakBonus?: number;
 }
 
 export type ConfidenceRating = 'again' | 'hard' | 'good' | 'easy';
 
 export interface Attempt {
     mcqId: string;
-    selectedAnswer: string | null;
     isCorrect: boolean;
-    timestamp: Date;
+    selectedAnswer: string | null;
+    timestamp: Date | FieldValue;
     userId: string;
-    sessionId: string;
-    confidenceRating: ConfidenceRating;
+    sessionId?: string;
+    confidenceRating?: ConfidenceRating;
     interval: number;
     easeFactor: number;
     repetitions: number;
-    nextReviewDate: Date;
+    nextReviewDate: Date | FieldValue;
+    lastAttempted: Date | FieldValue;
+    topicId: string;
+    chapterId: string;
+}
+
+export interface AttemptedMCQDocument {
+    id: string;
+    latestAttempt: Attempt;
+    history: Attempt[];
+    attempts: number;
+    correct: number;
+    incorrect: number;
+    createdAt: Date | FieldValue;
+    updatedAt?: Date | FieldValue;
 }
 
 export interface AttemptedMCQs {
-    [mcqId: string]: {
-        history: Attempt[];
-        latestAttempt: Attempt;
-    };
+    [mcqId: string]: AttemptedMCQDocument;
 }
 
 export interface FlashcardAttempt {
     flashcardId: string;
     rating: ConfidenceRating;
-    timestamp: Date;
+    timestamp: Date | FieldValue;
     interval: number;
     easeFactor: number;
     repetitions: number;
-    nextReviewDate: Date;
+    nextReviewDate: Date | FieldValue;
+    lastAttempted: Date | FieldValue;
+    reviews: number;
 }
 
-export interface AwaitingReviewData {
-    mcqs: Partial<MCQ>[];
-    flashcards: Partial<Flashcard>[];
-}
-
-export type UploadStatus = 'pending_upload' | 'pending_ocr' | 'failed_ocr' | 'processed' | 'pending_classification' | 'pending_approval' | 'batch_ready' | 'generating_batch' | 'pending_final_review' | 'pending_marrow_generation_approval' | 'pending_generation_decision' | 'pending_planning' | 'pending_generation' | 'generating_content' | 'generation_failed_partially' | 'pending_assignment' | 'pending_assignment_review' | 'completed' | 'error' | 'failed_unsupported_type' | 'archived' | 'failed_ai_extraction' | 'failed_api_permission';
-
-export interface ContentGenerationJob {
+export interface Goal {
     id: string;
     userId: string;
     title: string;
-    fileName?: string; // Added from code usage and older versions
-    pipeline: 'general' | 'marrow';
-    status: UploadStatus;
-    sourceText?: string;
-    createdAt: Date;
-    updatedAt?: Date;
-    errors?: string[];
-    suggestedPlan?: {
-        mcqCount: number;
-        flashcardCount: number;
-        chapterBreakdown: string[];
-    };
-    totalMcqCount?: number;
-    totalFlashcardCount?: number;
-    totalBatches?: number;
-    completedBatches?: number;
-    generatedContent?: Array<{
-        batchNumber: number;
-        mcqs: Partial<MCQ>[];
-        flashcards: Partial<Flashcard>[];
-    }>;
-    finalAwaitingReviewData?: AwaitingReviewData;
-    assignmentSuggestions?: AssignmentSuggestion[];
-    stagedContent?: { // Added from code and older versions
-        extractedMcqs?: Partial<MCQ>[];
-        orphanExplanations?: string[];
-        generatedMcqs?: Partial<MCQ>[];
-        generatedFlashcards?: Partial<Flashcard>[];
-    };
-    suggestedKeyTopics?: string[]; // Added from code
-    existingQuestionSnippets?: string[]; // Added from code
+    targetDate: Date | FieldValue;
+    progress: number;
+    type: 'chapter' | 'mcq_count' | 'study_time' | 'daily';
+    targetValue?: number;
+    currentValue?: number;
+    chapterId?: string;
+    topicId?: string;
+    createdAt?: Date | FieldValue;
+    updatedAt?: Date | FieldValue;
+    isCompleted?: boolean;
+    reward?: string;
 }
 
-export interface ChatMessage { id: string; text: string; sender: 'user' | 'assistant'; timestamp: Date; }
+// Export GoalInput for use in callable function validation
+export interface GoalInput extends Omit<Goal, 'targetDate' | 'createdAt' | 'updatedAt' | 'id' | 'userId'> {
+    targetDate: Date | string;
+}
+
+export interface ChatMessage {
+    id: string;
+    text: string;
+    sender: 'user' | 'assistant';
+    timestamp: Date;
+}
+
+export interface LogEntry {
+    id: string;
+    userId: string;
+    message: string;
+    timestamp: Date | FieldValue;
+    type?: 'info' | 'warn' | 'error';
+    context?: Record<string, any>;
+}
+
+export type UploadStatus =
+    | 'pending_upload' | 'pending_ocr' | 'failed_ocr' | 'processed' | 'pending_classification'
+    | 'pending_approval' | 'batch_ready' | 'generating_batch' | 'pending_final_review'
+    | 'pending_marrow_extraction' | 'pending_generation_decision' | 'pending_assignment'
+    | 'pending_assignment_review' | 'completed' | 'error' | 'failed_unsupported_type'
+    | 'failed_ai_extraction' | 'failed_api_permission' | 'archived' | 'generation_failed_partially';
+
+export interface SuggestedPlan { mcqCount: number; flashcardCount: number; }
+
+export interface StagedContent {
+    extractedMcqs?: Array<Partial<MCQ>>;
+    orphanExplanations?: string[];
+    generatedMcqs?: Array<Partial<MCQ>>;
+    generatedFlashcards?: Array<Partial<Flashcard>>;
+}
 
 export interface AssignmentSuggestion {
     topicName: string;
     chapterName: string;
     isNewChapter: boolean;
-    mcqIndexes?: number[];
-    flashcardIndexes?: number[];
-    mcqs?: Partial<MCQ>[];
-    flashcards?: Partial<Flashcard>[];
+    mcqs?: Array<Partial<MCQ> & { id?: string }>;
+    flashcards?: Array<Partial<Flashcard> & { id?: string }>;
 }
 
+export interface ContentGenerationJob {
+    id: string;
+    userId: string;
+    title: string;
+    fileName?: string;
+    pipeline: 'general' | 'marrow';
+    status: UploadStatus;
+    extractedText?: string;
+    sourceText?: string;
+    createdAt: Date | FieldValue;
+    updatedAt?: Date | FieldValue;
+    errors?: string[];
+    suggestedTopic?: string;
+    suggestedChapter?: string;
+    suggestedPlan?: SuggestedPlan;
+    sourceReference?: string;
+    batchSize?: number;
+    totalBatches?: number;
+    completedBatches?: number;
+    textChunks?: string[];
+    generatedContent?: Array<{ batchNumber: number; mcqs: Partial<MCQ>[]; flashcards: Partial<Flashcard>[]; }>;
+    finalAwaitingReviewData?: { mcqs: Array<Partial<MCQ>>; flashcards: Array<Partial<Flashcard>>; };
+    assignmentSuggestions?: AssignmentSuggestion[];
+    approvedTopic?: string;
+    approvedChapter?: string;
+    existingQuestionSnippets?: string[];
+    stagedContent?: StagedContent;
+    suggestedKeyTopics?: string[];
+    suggestedNewMcqCount?: number;
+    totalMcqCount?: number;
+    totalFlashcardCount?: number;
+}
+export type UserUpload = ContentGenerationJob;
+
+
+export interface CramSheet {
+    id: string;
+    userId: string;
+    title: string;
+    content: string; // Markdown content
+    topicId?: string;
+    chapterId?: string;
+    createdAt: Date | FieldValue;
+    updatedAt?: Date | FieldValue;
+}
+
+
+// Callable Data Interfaces (for Zod validation and frontend/backend contract)
 export interface AddAttemptCallableData {
     mcqId: string;
     selectedAnswer: string | null;
     isCorrect: boolean;
-    sessionId: string;
-    confidenceRating: ConfidenceRating;
+    sessionId?: string;
+    confidenceRating?: ConfidenceRating;
 }
+export interface AddFlashcardAttemptCallableData { flashcardId: string; rating: ConfidenceRating; }
+export interface ToggleBookmarkCallableData { contentId: string; contentType: 'mcq' | 'flashcard'; }
+export interface DeleteContentItemCallableData { id: string; type: 'mcq' | 'flashcard'; collectionName: 'MasterMCQ' | 'MarrowMCQ' | 'Flashcards'; }
+export interface GenerateWeaknessBasedTestCallableData { allMcqs: Array<Pick<MCQ, 'id' | 'topicId' | 'chapterId' | 'source' | 'tags' | 'difficulty'>>; testSize: number; }
+export interface GetDailyWarmupQuizCallableData { }
+export interface GetExpandedSearchTermsCallableData { query: string; }
+export interface GetHintCallableData { mcqId: string; }
+export interface EvaluateFreeTextAnswerCallableData { mcqId: string; userAnswer: string; }
+export interface CreateFlashcardFromMcqCallableData { mcqId: string; }
+export interface CreateCustomTestCallableData { title: string; questions: string[]; }
+export interface SearchContentCallableData { query: string; terms?: string[]; }
+export interface ChatWithAssistantCallableData { prompt: string; history: ChatMessage[]; context?: { mcqId?: string; flashcardId?: string; chapterId?: string; chapterNotes?: string }; } // Added context
+export interface GeneratePerformanceAdviceCallableData { overallAccuracy: number; strongTopics: string[]; weakTopics: string[]; }
+export interface GetQuizSessionFeedbackCallableData { quizResultId: string; }
+export interface GetDailyGoalCallableData { userId: string; }
+export interface GenerateQuickFireTestCallableData { testSize: number; }
+export interface UpdateThemeCallableData { themeName: string; }
+export interface SendPushNotificationCallableData { token: string; title: string; body: string; data?: { [key: string]: string }; }
+export interface ProcessManualTextInputCallableData { fileName: string; rawText: string; isMarrow: boolean; }
+export interface ExtractMarrowContentCallableData { uploadId: string; }
+export interface GenerateAndAnalyzeMarrowContentCallableData { uploadId: string; count: number; }
+export interface ApproveMarrowContentCallableData { uploadId: string; topicId: string; topicName: string; chapterId: string; chapterName: string; keyTopics: string[]; }
+export interface ApproveContentCallableData { uploadId: string; assignments: AssignmentSuggestion[]; }
+export interface ResetUploadCallableData { uploadId: string; }
+export interface ArchiveUploadCallableData { uploadId: string; }
+export interface ReassignContentCallableData { uploadId: string; }
+export interface PrepareForRegenerationCallableData { uploadId: string; }
+export interface SuggestClassificationCallableData { uploadId: string; }
+export interface PrepareBatchGenerationCallableData { uploadId: string; totalMcqCount: number; totalFlashcardCount: number; batchSize: number; approvedTopic: string; approvedChapter: string; }
+export interface StartAutomatedBatchGenerationCallableData { uploadId: string; }
+export interface AutoAssignContentCallableData { uploadId: string; existingTopics: PediaquizTopicType[]; scopeToTopicName?: string; }
+export interface UpdateChapterNotesCallableData { topicId: string; chapterId: string; newSummary: string; source: 'General' | 'Marrow'; }
+export interface GenerateChapterSummaryCallableData { uploadIds: string[]; topicId?: string; chapterId?: string; source?: 'General' | 'Marrow'; } // Add optional save context
+export interface GenerateCramSheetCallableData { chapterIds?: string[]; topicIds?: string[]; userId: string; content?: string; title: string; } // NEW: For Cram Sheets
+export interface GetDailyGrindPlaylistCallableData { userId: string; mcqCount: number; flashcardCount: number; } // NEW: For Daily Grind
+// Made topicIds and chapterIds optional
+export interface GetMockExamQuestionsCallableData { userId: string; topicIds?: string[]; chapterIds?: string[]; questionCount: number; } // NEW: For Mock Exam
+export interface EvaluateDDxCallableData { clinicalFindings: string; userAnswer: string; } // NEW: For DDx Game
+export interface SuggestNewGoalCallableData { userId: string; type?: 'chapter' | 'mcq_count' | 'study_time'; accuracy?: number; weakTopics?: string[]; } // NEW: For AI suggested goals
 
-export interface AddFlashcardAttemptCallableData {
-    flashcardId: string;
-    rating: ConfidenceRating;
-}
 
-export interface ToggleBookmarkCallableData {
-    contentId: string;
-    contentType: 'mcq' | 'flashcard';
-    action: 'add' | 'remove';
-}
-
-export interface DeleteContentItemCallableData {
-    id: string;
-    type: 'mcq' | 'flashcard';
-    collectionName: 'MasterMCQ' | 'MarrowMCQ' | 'Flashcards';
-}
-
-export interface GenerateWeaknessBasedTestCallableData {
-    testSize: number;
-}
-
-export interface GetDailyWarmupQuizCallableData {
-    count: number;
-}
-
-export interface GetExpandedSearchTermsCallableData {
-    query: string;
-}
-
-export interface GetHintCallableData {
-    mcqId: string;
-}
-
-export interface EvaluateFreeTextAnswerCallableData {
-    mcqId: string;
-    userAnswer: string;
-}
-
-export interface CreateFlashcardFromMcqCallableData {
-    mcqId: string;
-}
-
-export interface SuggestAssignmentCallableData {
-    jobId: string;
-    existingTopics: PediaquizTopicType[];
-    scopeToTopicName?: string;
-}
-
-export interface PlanContentGenerationCallableData {
-    jobId: string;
-}
-
-export interface ExecuteContentGenerationCallableData {
-    jobId: string;
-    mcqCount: number;
-    flashcardCount: number;
-    startBatch?: number;
-}
-
-export interface GenerateChapterSummaryCallableData {
-    uploadIds: string[];
-}
-
-export interface ApproveGeneratedContentCallableData {
-    jobId: string;
-    topicId: string;
-    topicName: string;
-    chapterId: string;
-    chapterName: string;
-    keyTopics?: string[];
-    summaryNotes?: string;
-    generatedMcqs?: Partial<MCQ>[];
-    generatedFlashcards?: Partial<Flashcard>[];
-    pipeline: 'general' | 'marrow';
-}
-
-export interface UpdateChapterNotesCallableData {
-    topicId: string;
-    chapterId: string;
-    newSummary: string;
-    source: 'General' | 'Marrow';
-}
-
-export type AppData = {
+export interface AppData {
     topics: Topic[];
+    // mcqs: MCQ[]; // Removed as it's not loaded globally
+    // flashcards: Flashcard[]; // Removed as it's not loaded globally
     keyClinicalTopics: string[];
 };

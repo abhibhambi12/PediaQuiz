@@ -1,2 +1,32 @@
-.env**/frontend/.env
+# Environment variables for frontend.
+# The .env file in the frontend/ directory is sensitive and should not be committed.
+frontend/.env
+
+# Node modules
 node_modules
+
+# Generated build artifacts
+dist
+lib
+
+# IDE and OS files
+.DS_Store
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.idea/
+.vscode/
+
+# Firebase specific ignores
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+
+# Monorepo build artifacts
+# CRITICAL: This path needs to be correct for the monorepo structure.
+workspaces/functions/dist/
+
+# Emulator specific configurations (if containing secrets)
+# apphosting.emulator.yaml (if secrets are plain text, but secrets should be in Secret Manager)
+# This file is generally safe to commit unless it's populated with sensitive plaintext values.

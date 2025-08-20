@@ -1,3 +1,4 @@
+// frontend/src/pages/GeneratorPage.tsx
 import React, { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { httpsCallable } from 'firebase/functions';
@@ -5,9 +6,11 @@ import { functions } from '@/firebase';
 import Loader from '@/components/Loader';
 import { useToast } from '@/components/Toast';
 import { useAuth } from '@/contexts/AuthContext'; // To get userId for job creation
+// Direct type import
+import { ProcessManualTextInputCallableData } from '@pediaquiz/types';
 
 // Callable function to process manual text input (backend function: processManualTextInput)
-const processManualTextInputFn = httpsCallable<{ fileName: string, rawText: string, isMarrow: boolean }, { success: boolean, uploadId: string, message: string }>(functions, 'processManualTextInput');
+const processManualTextInputFn = httpsCallable<ProcessManualTextInputCallableData, { success: boolean, uploadId: string, message: string }>(functions, 'processManualTextInput');
 
 const GeneratorPage: React.FC = () => {
     const { user } = useAuth();
@@ -18,7 +21,9 @@ const GeneratorPage: React.FC = () => {
     const queryClient = useQueryClient();
 
     const processTextInputMutation = useMutation({
-        mutationFn: (data: { fileName: string, rawText: string, isMarrow: boolean }) => processManualTextInputFn(data),
+        mutationFn: (data: { fileName: string, rawText: string, isMarrow: boolean }) => {
+            return processManualTextInputFn({ fileName: data.fileName, rawText: data.rawText, isMarrow: data.isMarrow });
+        },
         onSuccess: (data) => {
             addToast(data.data.message, 'success');
             setTitle('');
@@ -58,11 +63,11 @@ const GeneratorPage: React.FC = () => {
 
     return (
         <div className="p-6 max-w-3xl mx-auto">
-            <h1 className="text-3xl font-bold mb-6">Content Uploader & Manual Input</h1>
+            <h1 className="text-3xl font-bold mb-6 text-slate-800 dark:text-slate-50">Content Uploader & Manual Input</h1>
 
             <form onSubmit={handleSubmit} className="card-base p-6 space-y-4">
                 <div>
-                    <label htmlFor="contentTitle" className="block text-sm font-medium mb-1">Content Title (for job tracking)</label>
+                    <label htmlFor="contentTitle" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Content Title (for job tracking)</label>
                     <input
                         id="contentTitle"
                         type="text"
@@ -71,10 +76,11 @@ const GeneratorPage: React.FC = () => {
                         placeholder="e.g., Pediatric Cardiology Notes"
                         className="input-field"
                         disabled={processTextInputMutation.isPending}
+                        required
                     />
                 </div>
                 <div>
-                    <label htmlFor="rawTextInput" className="block text-sm font-medium mb-1">Paste Raw Text Content</label>
+                    <label htmlFor="rawTextInput" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Paste Raw Text Content</label>
                     <textarea
                         id="rawTextInput"
                         value={rawText}
@@ -82,6 +88,7 @@ const GeneratorPage: React.FC = () => {
                         className="input-field h-64 resize-y"
                         placeholder="Paste your medical notes, Marrow explanations, or general text here."
                         disabled={processTextInputMutation.isPending}
+                        required
                     />
                 </div>
                 <div className="flex items-center">

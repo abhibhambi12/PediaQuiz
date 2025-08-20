@@ -1,7 +1,7 @@
 {
   "functions": [
     {
-      "source": "functions/dist",
+      "source": "workspaces/functions/dist",
       "codebase": "default",
       "ignore": [],
       "runtime": "nodejs20"

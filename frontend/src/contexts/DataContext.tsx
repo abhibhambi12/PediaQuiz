@@ -1,42 +1,74 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { getUserData } from '../services/userDataService';
-import { useAuth } from './AuthContext'; // CORRECTED: Import useAuth to get UID
-import type { UserData } from '@pediaquiz/types';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
+import { useAuth } from './AuthContext';
+import { getTopics } from '../services/firestoreService'; // Only getTopics is globally loaded
+// Removed explicit Firestore SDK types imports as they're not needed here for top-level context
+// import { collection, query, where, getDocs, QueryDocumentSnapshot, Firestore } from 'firebase/firestore';
+// import { db } from '@/firebase'; // No longer directly used here for data fetching
+import { AppData, Topic } from '@pediaquiz/types'; // Removed MCQ, Flashcard types as they are not stored here
+import { useToast } from '@/components/Toast';
+import { useQuery } from '@tanstack/react-query';
+
 
 interface DataContextType {
-  userData: UserData | null;
-  refreshData: () => Promise<void>;
+  appData: AppData | null;
+  isLoadingData: boolean;
+  errorLoadingData: Error | null;
+  refreshAppData: () => void;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [userData, setUserData] = useState<UserData | null>(null);
-  const { user, loading } = useAuth(); // CORRECTED: Get user and loading from AuthContext
+  const { user, loading: loadingAuth } = useAuth();
+  const { addToast } = useToast();
 
-  const refreshData = async () => {
-    // CORRECTED: Only attempt to fetch data if user is loaded and authenticated
-    if (user && user.uid) {
-      try {
-        const data = await getUserData(user.uid); // CORRECTED: Pass user.uid
-        setUserData(data);
-      } catch (error) {
-        console.error('Failed to fetch user data:', error);
-        setUserData(null);
-      }
-    } else if (!loading && !user) {
-      // If loading is complete and no user, set data to null
-      setUserData(null);
-    }
-  };
+  const { data: appData, isLoading: isLoadingData, error: errorLoadingData, refetch } = useQuery<AppData, Error>({
+    queryKey: ['appData'],
+    queryFn: async () => {
+      // Corrected to only fetch topics and tags globally, as MCQs/Flashcards are now on-demand
+      const [topics, tags] = await Promise.all([
+        getTopics(),
+        // Assuming getTags is still in firestoreService and fetching global tags
+        // If it's not, you'll need to re-add or adjust.
+        // For simplicity, let's assume getTags exists and returns string[]
+        // from your initial file list, getTags is in firestoreService.ts
+        // and returns string[]
+        import('../services/firestoreService').then(module => module.getTags()),
+      ]);
+
+      return {
+        topics: topics,
+        mcqs: [], // Now an empty array, actual MCQs are fetched on demand
+        flashcards: [], // Now an empty array, actual Flashcards are fetched on demand
+        keyClinicalTopics: tags,
+      };
+    },
+    enabled: !loadingAuth, // Only run the query once AuthContext has determined auth state
+    staleTime: 1000 * 60 * 5, // Data considered fresh for 5 minutes (for topics/tags)
+    gcTime: 1000 * 60 * 60 * 24, // Data garbage collected after 24 hours
+    refetchOnWindowFocus: false, // Prevents refetching on tab refocus
+  });
 
   useEffect(() => {
-    // Trigger refreshData whenever the user or loading state changes
-    refreshData();
-  }, [user, loading]); // CORRECTED: Add user and loading to dependencies
+    if (errorLoadingData) {
+      console.error('Failed to load application data:', errorLoadingData);
+      addToast(`Failed to load app data: ${errorLoadingData.message}`, 'error');
+    }
+  }, [errorLoadingData, addToast]);
+
+  const refreshAppData = useCallback(() => {
+    refetch();
+  }, [refetch]);
+
+  const contextValue = useMemo(() => ({
+    appData: appData || null,
+    isLoadingData: isLoadingData,
+    errorLoadingData: errorLoadingData,
+    refreshAppData: refreshAppData,
+  }), [appData, isLoadingData, errorLoadingData, refreshAppData]);
 
   return (
-    <DataContext.Provider value={{ userData, refreshData }}>
+    <DataContext.Provider value={contextValue}>
       {children}
     </DataContext.Provider>
   );

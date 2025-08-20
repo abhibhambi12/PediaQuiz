@@ -1,4 +1,3 @@
-// setAdmin.js
 const admin = require('firebase-admin');
 
 // --- FIX: SECURE INITIALIZATION ---
@@ -8,17 +7,19 @@ const admin = require('firebase-admin');
 admin.initializeApp();
 
 // Ensure this is the correct email you want to make an admin
-const targetEmail = 'abhibhambi01@gmail.com'; 
+const targetEmail = 'abhibhambi01@gmail.com';
 
 async function setAdminClaim() {
   try {
     const user = await admin.auth().getUserByEmail(targetEmail);
-    
+
     // Set the custom claim for the Firebase Authentication user
     await admin.auth().setCustomUserClaims(user.uid, { isAdmin: true });
     console.log(`Successfully set custom claim 'isAdmin: true' for user: ${targetEmail} (UID: ${user.uid})`);
 
     // Also update the Firestore user document for consistency
+    // This is important because security rules often check `resource.data.isAdmin`
+    // which comes from the Firestore document, not just the token.
     await admin.firestore().collection('users').doc(user.uid).update({ isAdmin: true });
     console.log(`Successfully updated Firestore document 'isAdmin: true' for user: ${targetEmail}`);
 
