@@ -1,5 +1,6 @@
 // frontend/src/App.tsx
 // frontend/src/App.tsx
+// frontend/src/App.tsx
 import React, { Suspense, useEffect } from "react";
 import {
   BrowserRouter as Router,
@@ -243,7 +244,8 @@ const AppContent: React.FC = () => {
           <Route path="/chapters/:topicId/:chapterId" element={<ChapterDetailPage />} />
           <Route path="/custom-test-builder" element={<CustomTestBuilder />} />
           <Route path="/chat" element={<ChatPage />} />
-          <Route path="/marrow-qbank" element={<MarrowQBankPage />} />
+          {/* CRITICAL FIX: Removed MarrowQBankPage route as it's deprecated */}
+          {/* <Route path="/marrow-qbank" element={<MarrowQBankPage />} /> */}
           <Route path="/stats" element={<StatsPage />} />
           <Route path="/log-screen" element={<LogScreenPage />} />
           <Route path="/bookmarks" element={<BookmarksPage />} />

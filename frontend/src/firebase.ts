@@ -1,4 +1,5 @@
 // frontend/src/firebase.ts
+// frontend/src/firebase.ts
 // MODIFIED: Corrected environment variable access for Vite (`import.meta.env`).
 //           Corrected `getFunctions` initialization.
 //           Ensured offline persistence is enabled.

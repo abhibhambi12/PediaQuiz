@@ -1,3 +1,4 @@
+// frontend/pages/StatsPage.tsx
 import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, QueryClient } from '@tanstack/react-query';
 import { HttpsCallableResult } from 'firebase/functions';

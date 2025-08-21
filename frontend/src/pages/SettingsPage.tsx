@@ -1,4 +1,5 @@
 // frontend/pages/SettingsPage.tsx
+// frontend/pages/SettingsPage.tsx
 import React, { useState, useMemo, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../components/Toast';

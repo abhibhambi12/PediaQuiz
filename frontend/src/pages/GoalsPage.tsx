@@ -1,3 +1,4 @@
+// frontend/pages/GoalsPage.tsx
 // frontend/src/pages/GoalsPage.tsx
 import React, { useState, useEffect } from 'react';
 import { SparklesIcon } from '@heroicons/react/24/outline';
@@ -5,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/Toast';
 import { getGoals, setGoal, updateGoal, deleteGoal } from '@/services/userDataService';
+import { suggestNewGoal } from '@/services/aiService'; // CRITICAL FIX: Import AI suggested goal callable
 import ConfirmationModal from '@/components/ConfirmationModal';
 import Loader from '@/components/Loader';
 // Direct type imports
@@ -35,6 +37,10 @@ const GoalsPage: React.FC = () => {
     const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
     const [goalToDelete, setGoalToDelete] = useState<string | null>(null);
 
+    // CRITICAL FIX: State for AI suggested goal
+    const [isAISuggestionModalOpen, setIsAISuggestionModalOpen] = useState(false);
+    const [aiSuggestedGoal, setAiSuggestedGoal] = useState<GoalInput | null>(null);
+
     const { data: goals, isLoading: isLoadingGoals, error: goalsError } = useQuery<Goal[], Error>({
         queryKey: ['userGoals', user?.uid],
         queryFn: () => getGoals(user!.uid),
@@ -54,6 +60,7 @@ const GoalsPage: React.FC = () => {
             setNewGoalTargetDate('');
             setNewGoalTargetValue(100);
             setNewGoalReward('');
+            setIsAISuggestionModalOpen(false); // Close suggestion modal after accepting
         },
         onError: (error: any) => addToast(`Failed to add goal: ${error.message}`, "error"),
     });
@@ -79,6 +86,21 @@ const GoalsPage: React.FC = () => {
         },
         onError: (error: any) => addToast(`Failed to delete goal: ${error.message}`, "error"),
     });
+
+    // CRITICAL FIX: AI Suggested Goal Mutation
+    const suggestNewGoalMutation = useMutation({
+        mutationFn: () => suggestNewGoal({ userId: user!.uid }), // Assuming userId is passed implicitly or directly
+        onSuccess: (data) => {
+            if (data.data.success && data.data.goal) {
+                setAiSuggestedGoal(data.data.goal);
+                setIsAISuggestionModalOpen(true);
+            } else {
+                addToast("AI could not suggest a new goal at this time.", "info");
+            }
+        },
+        onError: (error: any) => addToast(`Failed to get AI goal suggestion: ${error.message}`, "error"),
+    });
+
 
     const handleAddGoal = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -139,6 +161,14 @@ const GoalsPage: React.FC = () => {
         }
     };
 
+    // CRITICAL FIX: Handle accepting AI suggested goal
+    const handleAcceptSuggestedGoal = () => {
+        if (aiSuggestedGoal) {
+            setGoalMutation.mutate(aiSuggestedGoal);
+        }
+    };
+
+
     if (isLoadingGoals) return <Loader message="Loading goals..." />;
     if (!user) return <div className="text-center p-10 text-slate-500">Please log in to manage your goals.</div>;
 
@@ -180,6 +210,15 @@ const GoalsPage: React.FC = () => {
                     </div>
                     <button type="submit" className="btn-primary w-full" disabled={setGoalMutation.isPending}>
                         {setGoalMutation.isPending ? 'Adding...' : 'Add Goal'}
+                    </button>
+                    {/* CRITICAL FIX: AI Suggested Goals button */}
+                    <button
+                        type="button"
+                        onClick={() => suggestNewGoalMutation.mutate()}
+                        disabled={suggestNewGoalMutation.isPending}
+                        className="btn-secondary w-full mt-2"
+                    >
+                        {suggestNewGoalMutation.isPending ? 'Suggesting...' : '✨ AI Suggest a Goal'}
                     </button>
                 </form>
             </div>
@@ -226,6 +265,29 @@ const GoalsPage: React.FC = () => {
             )}
 
             <ConfirmationModal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} onConfirm={handleConfirmDelete} title="Delete Goal" message="Are you sure you want to delete this goal?" variant="danger" isLoading={deleteGoalMutation.isPending} />
+
+            {/* CRITICAL FIX: AI Suggested Goal Modal */}
+            <ConfirmationModal
+                isOpen={isAISuggestionModalOpen}
+                onClose={() => setIsAISuggestionModalOpen(false)}
+                onConfirm={handleAcceptSuggestedGoal}
+                title="AI Suggested Goal"
+                message="PediaQuiz suggests a new goal for you!"
+                confirmText="Accept Goal"
+                cancelText="Decline"
+                variant="confirm"
+                isLoading={setGoalMutation.isPending}
+            >
+                {aiSuggestedGoal && (
+                    <div className="text-left text-slate-700 dark:text-slate-300">
+                        <p className="font-semibold text-lg mb-2">{aiSuggestedGoal.title}</p>
+                        <p>Type: {aiSuggestedGoal.type}</p>
+                        {aiSuggestedGoal.targetValue && <p>Target: {aiSuggestedGoal.targetValue}</p>}
+                        {aiSuggestedGoal.reward && <p>Reward: {aiSuggestedGoal.reward}</p>}
+                        {aiSuggestedGoal.targetDate && <p>Due: {format(new Date(aiSuggestedGoal.targetDate), 'PPP')}</p>}
+                    </div>
+                )}
+            </ConfirmationModal>
         </div>
     );
 };

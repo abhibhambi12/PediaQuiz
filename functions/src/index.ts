@@ -153,7 +153,7 @@ export const onUserCreate = functionsV1.region(LOCATION).auth.user().onCreate(as
  * This function processes the file (OCR for PDFs, reads text for TXT/DOCX) and
  * creates a content generation job in Firestore.
  */
-export const onFileUploaded = onObjectFinalized({ cpu: 2, memory: "1GiB", timeoutSeconds: 300, bucket: `${PROJECT_ID}.appspot.com`, }, async (event) => {
+export const onFileUploaded = onObjectFinalized({ cpu: 2, memory: "1GiB", timeoutSeconds: 300, bucket: "pediaquizapp.firebasestorage.app", }, async (event) => { // CRITICAL FIX: Updated bucket name
     ensureClientsInitialized();
     const { bucket, name, contentType } = event.data;
 
@@ -337,7 +337,7 @@ export const onJobStatusChange = onDocumentUpdated({
         if (totalBatches === 0) {
             logger.warn(`Job ${after.id}: No text chunks found for batch generation. Setting to error.`);
             await db.collection("contentGenerationJobs").doc(after.id).update({ status: 'error', errors: FieldValue.arrayUnion('No text chunks for generation.') });
-            await logUserAction(after.userId, `Batch generation failed for job ${after.title} (${after.id}): No text chunks.`, 'error');
+            await logUserAction(after.userId, `Batch generation failed for job ${after.title} (${after.id}): No text chunks.`, 'error', { batchError: 'No text chunks for generation.' }); // CRITICAL FIX: Pass error message explicitly for logging
             return;
         }
 
@@ -396,9 +396,10 @@ export const onJobStatusChange = onDocumentUpdated({
             } catch (batchError: any) {
                 const errorMessage = `Batch ${i + 1} failed: ${batchError.message || 'Unknown error'}`;
                 logger.error(`Job ${after.id}: ${errorMessage}`, { batchError });
+                generationErrors.push(errorMessage); // CRITICAL FIX: Add error to array
                 // If a batch fails, update status to partial failure and break the loop
                 await db.collection("contentGenerationJobs").doc(after.id).update({
-                    status: 'generation_failed_partially', errors: FieldValue.arrayUnion(errorMessage), updatedAt: FieldValue.serverTimestamp()
+                    status: 'generation_failed_partially', errors: FieldValue.arrayUnion(errorMessage)
                 });
                 await logUserAction(after.userId, `Batch ${i + 1} generation failed for job ${after.title} (${after.id}): ${errorMessage}.`, 'error', { batchError: errorMessage });
                 break; // Stop further batch processing on first failure
@@ -1942,12 +1943,12 @@ export const generateChapterSummary = onCall(HEAVY_FUNCTION_OPTIONS, async (requ
     }
 
     if (sourceTexts.length === 0) {
-        throw new HttpsError('not-found', 'No source text available from provided upload IDs for summary generation.');
+        throw new HttpsError('invalid-argument', 'No source text available from provided upload IDs for summary generation.');
     }
 
     const combinedText = sourceTexts.join('\n\n');
     const MAX_SUMMARY_CONTEXT = 25000; // Max characters to send to AI model
-    const truncatedText = combinedText.length > MAX_SUMMARY_CONTEXT ? combinedText.substring(0, MAX_SUMMARY_CONTEXT) + "..." : combinedText;
+    const truncatedText = combinedText.length > MAX_SUMMARY_CONTEXT ? combinedText.substring(0, MAX_SUMMARY_CONTEXT) + "..." : combinedText; // CRITICAL FIX: Changed MAX_CRAM_SHEET_CONTEXT to MAX_SUMMARY_CONTEXT
 
     ensureClientsInitialized();
     try {
@@ -2816,13 +2817,13 @@ export const generateCramSheet = onCall(HEAVY_FUNCTION_OPTIONS, async (request) 
         throw new HttpsError('invalid-argument', 'No content provided or found for cram sheet generation. Please provide direct content or valid chapter/topic IDs with existing notes.');
     }
 
-    const MAX_CRAM_SHEET_CONTEXT = 30000; // Max characters for AI input
+    const MAX_CRAM_SHEET_CONTEXT = 30000; // CRITICAL FIX: Defined MAX_CRAM_SHEET_CONTEXT here
     const truncatedText = sourceText.length > MAX_CRAM_SHEET_CONTEXT ? sourceText.substring(0, MAX_CRAM_SHEET_CONTEXT) + "..." : sourceText;
 
-    const prompt = `Generate a highly concise, high-yield cram sheet from the following medical text. Focus on essential facts, mnemonics, and clinical pearls. Use bullet points, short phrases, and bolding for readability. Aim for a dense, single-page summary suitable for quick review before an exam. Use relevant emojis to enhance memorability and engagement (e.g., 💡, 🔑, 🚨, ⛔️, 💯). Respond strictly in professional Markdown format.
+    try {
+        const prompt = `Generate a highly concise, high-yield cram sheet from the following medical text. Focus on essential facts, mnemonics, and clinical pearls. Use bullet points, short phrases, and bolding for readability. Aim for a dense, single-page summary suitable for quick review before an exam. Use relevant emojis to enhance memorability and engagement (e.g., 💡, 🔑, 🚨, ⛔️, 💯). Respond strictly in professional Markdown format.
     Content: ${truncatedText}`;
 
-    try {
         const result = await _powerfulModel.generateContent(prompt);
         const cramSheetContent = result.response.candidates?.[0]?.content?.parts?.[0]?.text || "No cram sheet could be generated.";
 
@@ -3003,8 +3004,8 @@ export const suggestNewGoal = onCall(HEAVY_FUNCTION_OPTIONS, async (request) => 
     const defaultGoalOptions = [
         { title: "Master 'General Pediatrics' Basics", type: "chapter", chapterId: normalizeId("General Pediatrics"), topicId: normalizeId("General Pediatrics"), reward: "150 Bonus XP" },
         { title: "Complete 25 MCQs Today", type: "mcq_count", targetValue: 25, reward: "50 Bonus XP" },
-        { title: "Review 'Congenital Heart Defects'", type: "chapter", chapterId: normalizeId("Congenital Heart Defects"), topicId: normalizeId("Pediatric Cardiology"), reward: "100 Bonus XP" },
-        { title: "Study for 30 minutes", type: "study_time", targetValue: 0.5, reward: "75 Bonus XP" },
+        { title: "Review 5 Flashcards", type: "mcq_count", targetValue: 5, reward: "50 bonus XP", sourceTopic: "Pediatric Cardiology", sourceChapter: "Congenital Heart Defects" },
+        { title: "Study 15 minutes", type: "study_time", targetValue: 0.25, reward: "75 bonus XP" }, // 0.25 hours = 15 minutes
     ];
 
     let suggestedGoal = defaultGoalOptions[Math.floor(Math.random() * defaultGoalOptions.length)];

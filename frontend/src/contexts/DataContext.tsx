@@ -1,3 +1,4 @@
+// frontend/src/contexts/DataContext.tsx
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 import { getTopics } from '../services/firestoreService'; // Only getTopics is globally loaded

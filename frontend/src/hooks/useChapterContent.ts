@@ -1,3 +1,4 @@
+// frontend/src/hooks/useChapterContent.ts
 import { useQuery } from '@tanstack/react-query';
 import { getChapterContent } from '@/services/firestoreService'; // Updated import
 // Using direct type imports from types package

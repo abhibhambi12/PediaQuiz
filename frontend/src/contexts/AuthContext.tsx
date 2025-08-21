@@ -1,3 +1,4 @@
+// frontend/src/contexts/AuthContext.tsx
 // MODIFIED: Updated to handle new user fields (XP, Level, Streak, Theme, Badges).
 //           Corrected Firebase Firestore imports.
 
@@ -135,6 +136,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const userDocRef = doc(db, 'users', user.uid);
         try {
             const updatesToApply = { ...updates };
+            // CRITICAL FIX: Ensure only mutable user fields are passed to Firestore `updateDoc`
+            // immutable fields like `createdAt`, `lastLogin`, and gamification stats
+            // managed by backend functions should not be updated directly by frontend `updateUserDoc`.
             delete updatesToApply.createdAt;
             delete updatesToApply.lastLogin;
             delete updatesToApply.xp;

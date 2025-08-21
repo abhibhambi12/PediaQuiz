@@ -1,3 +1,4 @@
+// frontend/components/AdminUploadCard.tsx
 // CRITICAL FIX: Completed all truncated code for action buttons and status handling.
 // MODIFIED: Added General pipeline topic/chapter selection, and "Generate Summary" button.
 

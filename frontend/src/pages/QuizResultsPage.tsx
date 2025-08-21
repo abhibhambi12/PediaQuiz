@@ -1,3 +1,4 @@
+// frontend/pages/QuizResultsPage.tsx
 // frontend/src/pages/QuizResultsPage.tsx
 // frontend/pages/QuizResultsPage.tsx
 import React, { useMemo, useEffect, useState } from 'react';

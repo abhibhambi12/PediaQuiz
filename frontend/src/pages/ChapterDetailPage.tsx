@@ -17,7 +17,7 @@ import clsx from 'clsx';
 // Ensure all necessary Chart.js components are registered
 import { Chart as ChartJS, ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement as ChartJsBarElement } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
-import { Timestamp } from 'firebase/firestore'; // Import Timestamp for date handling
+import { Timestamp } from 'firebase/firestore'; // Import Timestamp
 import { normalizeId } from '@/utils/helpers'; // Import normalizeId
 
 // Register Chart.js components required for Doughnut chart

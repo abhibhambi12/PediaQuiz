@@ -1,3 +1,4 @@
+// frontend/services/userDataService.ts
 import { db, functions } from '@/firebase';
 import { doc, getDoc, collection, getDocs, query, orderBy, QueryDocumentSnapshot, Timestamp, where } from 'firebase/firestore';
 import { httpsCallable, HttpsCallableResult } from 'firebase/functions';

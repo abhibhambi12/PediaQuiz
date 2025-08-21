@@ -1,3 +1,4 @@
+// setAdmin.js
 const admin = require('firebase-admin');
 
 // --- FIX: SECURE INITIALIZATION ---

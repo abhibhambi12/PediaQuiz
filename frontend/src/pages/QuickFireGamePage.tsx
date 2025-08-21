@@ -1,4 +1,4 @@
-// frontend/src/pages/QuickFireGamePage.tsx
+// frontend/pages/QuickFireGamePage.tsx
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';

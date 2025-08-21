@@ -1,3 +1,4 @@
+// frontend/services/aiService.ts
 // frontend/src/services/aiService.ts
 // MODIFIED: Updated callable function definitions to match new types and added new callables
 //          for gamification features (e.g., Daily Goal, Quick Fire, Theme).

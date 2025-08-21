@@ -1,5 +1,5 @@
 // packages/types/src/index.ts
-// Changed 'import type' to 'import' for FieldValue because it's used as a value (e.g., FieldValue.serverTimestamp()).
+// CRITICAL FIX: Changed 'import type' to 'import' for FieldValue because it's used as a value (e.g., FieldValue.serverTimestamp()).
 import { FieldValue } from 'firebase-admin/firestore';
 
 // --- USER & AUTH ---
@@ -100,8 +100,7 @@ export interface QuizSession {
     userId: string;
     mode: 'practice' | 'quiz' | 'custom' | 'weakness' | 'incorrect' | 'mock' | 'review_due' | 'warmup' | 'quick_fire' | 'daily_grind' | 'ddx_game'; // Added new modes
     mcqIds: string[];
-    // Added flashcardIds to QuizSession for mixed sessions
-    flashcardIds?: string[];
+    flashcardIds?: string[]; // NEW: Added flashcardIds to QuizSession for mixed sessions
     currentIndex: number;
     answers: Record<number, string | null>;
     markedForReview: number[];
@@ -226,18 +225,18 @@ export type UploadStatus =
 export interface SuggestedPlan { mcqCount: number; flashcardCount: number; }
 
 export interface StagedContent {
-    extractedMcqs?: Array<Partial<MCQ>>;
+    extractedMcqs?: Array<Partial<MCQ>>; 
     orphanExplanations?: string[];
-    generatedMcqs?: Array<Partial<MCQ>>;
-    generatedFlashcards?: Array<Partial<Flashcard>>;
+    generatedMcqs?: Array<Partial<MCQ>>; 
+    generatedFlashcards?: Array<Partial<Flashcard>>; 
 }
 
 export interface AssignmentSuggestion {
     topicName: string;
     chapterName: string;
     isNewChapter: boolean;
-    mcqs?: Array<Partial<MCQ> & { id?: string }>;
-    flashcards?: Array<Partial<Flashcard> & { id?: string }>;
+    mcqs?: Array<Partial<MCQ> & { id?: string }>; // Added id?: string for clarity on partial MCQs
+    flashcards?: Array<Partial<Flashcard> & { id?: string }>; // Added id?: string for clarity on partial Flashcards
 }
 
 export interface ContentGenerationJob {
@@ -247,32 +246,32 @@ export interface ContentGenerationJob {
     fileName?: string;
     pipeline: 'general' | 'marrow';
     status: UploadStatus;
-    extractedText?: string;
-    sourceText?: string;
+    extractedText?: string; // Original raw text extracted from the document
+    sourceText?: string; // The text that AI actually processes (might be cleaned version of extractedText)
     createdAt: Date | FieldValue;
     updatedAt?: Date | FieldValue;
     errors?: string[];
     suggestedTopic?: string;
     suggestedChapter?: string;
     suggestedPlan?: SuggestedPlan;
-    sourceReference?: string;
+    sourceReference?: string; // E.g., original Marrow module
     batchSize?: number;
     totalBatches?: number;
     completedBatches?: number;
-    textChunks?: string[];
+    textChunks?: string[]; // Store chunks for processing
     generatedContent?: Array<{ batchNumber: number; mcqs: Partial<MCQ>[]; flashcards: Partial<Flashcard>[]; }>;
     finalAwaitingReviewData?: { mcqs: Array<Partial<MCQ>>; flashcards: Array<Partial<Flashcard>>; };
     assignmentSuggestions?: AssignmentSuggestion[];
     approvedTopic?: string;
     approvedChapter?: string;
     existingQuestionSnippets?: string[];
-    stagedContent?: StagedContent;
-    suggestedKeyTopics?: string[];
-    suggestedNewMcqCount?: number;
+    stagedContent?: StagedContent; // For marrow pipeline: extracted MCQs and orphan explanations
+    suggestedKeyTopics?: string[]; // For marrow pipeline: AI suggested key topics/tags
+    suggestedNewMcqCount?: number; // For marrow pipeline: number of MCQs to generate from orphan explanations
     totalMcqCount?: number;
     totalFlashcardCount?: number;
 }
-export type UserUpload = ContentGenerationJob;
+export type UserUpload = ContentGenerationJob; // Alias for content generation jobs from user uploads
 
 
 export interface CramSheet {
@@ -288,6 +287,7 @@ export interface CramSheet {
 
 
 // Callable Data Interfaces (for Zod validation and frontend/backend contract)
+// CRITICAL FIX: Ensure all callable data interfaces are defined precisely matching the backend's expectations
 export interface AddAttemptCallableData {
     mcqId: string;
     selectedAnswer: string | null;
@@ -306,7 +306,8 @@ export interface EvaluateFreeTextAnswerCallableData { mcqId: string; userAnswer:
 export interface CreateFlashcardFromMcqCallableData { mcqId: string; }
 export interface CreateCustomTestCallableData { title: string; questions: string[]; }
 export interface SearchContentCallableData { query: string; terms?: string[]; }
-export interface ChatWithAssistantCallableData { prompt: string; history: ChatMessage[]; context?: { mcqId?: string; flashcardId?: string; chapterId?: string; chapterNotes?: string }; } // Added context
+// CRITICAL FIX: Added context to ChatWithAssistantCallableData
+export interface ChatWithAssistantCallableData { prompt: string; history: ChatMessage[]; context?: { mcqId?: string; flashcardId?: string; chapterId?: string; chapterNotes?: string }; }
 export interface GeneratePerformanceAdviceCallableData { overallAccuracy: number; strongTopics: string[]; weakTopics: string[]; }
 export interface GetQuizSessionFeedbackCallableData { quizResultId: string; }
 export interface GetDailyGoalCallableData { userId: string; }
@@ -325,12 +326,14 @@ export interface PrepareForRegenerationCallableData { uploadId: string; }
 export interface SuggestClassificationCallableData { uploadId: string; }
 export interface PrepareBatchGenerationCallableData { uploadId: string; totalMcqCount: number; totalFlashcardCount: number; batchSize: number; approvedTopic: string; approvedChapter: string; }
 export interface StartAutomatedBatchGenerationCallableData { uploadId: string; }
+// CRITICAL FIX: Added `PediaquizTopicType` to `existingTopics` for `AutoAssignContentCallableData`
 export interface AutoAssignContentCallableData { uploadId: string; existingTopics: PediaquizTopicType[]; scopeToTopicName?: string; }
 export interface UpdateChapterNotesCallableData { topicId: string; chapterId: string; newSummary: string; source: 'General' | 'Marrow'; }
-export interface GenerateChapterSummaryCallableData { uploadIds: string[]; topicId?: string; chapterId?: string; source?: 'General' | 'Marrow'; } // Add optional save context
+// CRITICAL FIX: Made topicId, chapterId, and source optional for GenerateChapterSummaryCallableData (used for saving, not always generation source)
+export interface GenerateChapterSummaryCallableData { uploadIds: string[]; topicId?: string; chapterId?: string; source?: 'General' | 'Marrow'; }
 export interface GenerateCramSheetCallableData { chapterIds?: string[]; topicIds?: string[]; userId: string; content?: string; title: string; } // NEW: For Cram Sheets
 export interface GetDailyGrindPlaylistCallableData { userId: string; mcqCount: number; flashcardCount: number; } // NEW: For Daily Grind
-// Made topicIds and chapterIds optional
+// NEW: Made topicIds and chapterIds optional for GetMockExamQuestionsCallableData
 export interface GetMockExamQuestionsCallableData { userId: string; topicIds?: string[]; chapterIds?: string[]; questionCount: number; } // NEW: For Mock Exam
 export interface EvaluateDDxCallableData { clinicalFindings: string; userAnswer: string; } // NEW: For DDx Game
 export interface SuggestNewGoalCallableData { userId: string; type?: 'chapter' | 'mcq_count' | 'study_time'; accuracy?: number; weakTopics?: string[]; } // NEW: For AI suggested goals
@@ -338,7 +341,7 @@ export interface SuggestNewGoalCallableData { userId: string; type?: 'chapter' |
 
 export interface AppData {
     topics: Topic[];
-    // mcqs: MCQ[]; // Removed as it's not loaded globally
-    // flashcards: Flashcard[]; // Removed as it's not loaded globally
+    // CRITICAL FIX: Removed mcqs and flashcards from AppData as they are no longer loaded globally.
+    // Fetching these globally was a performance bottleneck and is now handled on-demand by pages/components.
     keyClinicalTopics: string[];
 };

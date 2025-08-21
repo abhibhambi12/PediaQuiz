@@ -1,4 +1,5 @@
 // frontend/pages/MCQSessionPage.tsx
+// frontend/pages/MCQSessionPage.tsx
 import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -9,7 +10,7 @@ import { getHint, evaluateFreeTextAnswer } from "@/services/aiService";
 import { getMCQsByIds } from "@/services/firestoreService";
 import { SessionManager } from '@/services/sessionService';
 import { MCQ, QuizResult, AttemptedMCQDocument, ToggleBookmarkCallableData, DeleteContentItemCallableData, QuizSession } from "@pediaquiz/types";
-import { BookmarkIcon as BookmarkOutlineIcon, TrashIcon, LightBulbIcon, PencilIcon, ChevronDownIcon } from '@heroicons/react/24/outline';
+import { BookmarkIcon as BookmarkOutlineIcon, TrashIcon, LightBulbIcon, PencilIcon, ChevronDownIcon, DocumentPlusIcon } from '@heroicons/react/24/outline'; // CRITICAL FIX: Added DocumentPlusIcon
 import { BookmarkIcon as BookmarkSolidIcon } from '@heroicons/react/24/solid';
 import { useToast } from "@/components/Toast";
 import Loader from "@/components/Loader";
@@ -188,6 +189,18 @@ const MCQSessionPage: React.FC = () => {
         },
     });
 
+    // NEW FEATURE: Create Flashcard from MCQ (Feature #4.3)
+    const createFlashcardFromMcqMutation = useMutation({
+        mutationFn: (mcqId: string) => import('@/services/aiService').then(mod => mod.createFlashcardFromMcq({ mcqId })), // Dynamically import to avoid circular dependency
+        onSuccess: (data) => {
+            addToast(data.data.message || "Flashcard created successfully!", "success");
+            queryClient.invalidateQueries({ queryKey: ['allTopics'] }); // Flashcard count might update on chapter/topic
+            queryClient.invalidateQueries({ queryKey: ['chapterContent'] }); // Current chapter's content might update
+        },
+        onError: (error: any) => addToast(`Failed to create flashcard: ${error.message}`, "error"),
+    });
+
+
     const currentMcq = useMemo(() => mcqs[currentIndex], [mcqs, currentIndex]);
 
     // FIX: Define goToQuestion first, as it's a dependency for other callbacks and effects
@@ -326,6 +339,16 @@ const MCQSessionPage: React.FC = () => {
         // For now, it's just feedback.
     }, [currentMcq, userFreeTextAnswer, evaluateFreeTextAnswerMutation]);
 
+    // Handle Create Flashcard from MCQ (Feature #4.3)
+    const handleCreateFlashcard = useCallback(() => {
+        if (!user?.isAdmin || !currentMcq) {
+            addToast("You must be an admin to create flashcards.", "error");
+            return;
+        }
+        createFlashcardFromMcqMutation.mutate(currentMcq.id);
+    }, [user, currentMcq, createFlashcardFromMcqMutation, addToast]);
+
+
     // Navigation functions (goToQuestion is now declared above)
     const goToPreviousQuestion = useCallback(() => {
         goToQuestion(currentIndex - 1);
@@ -418,6 +441,12 @@ const MCQSessionPage: React.FC = () => {
                                 <PencilIcon className="h-6 w-6 text-purple-500" />
                             </button>
                         )}
+                        {/* NEW FEATURE: Create Flashcard from MCQ (Feature #4.3) - Admin only */}
+                        {user?.isAdmin && currentMcq && (
+                            <button onClick={handleCreateFlashcard} disabled={createFlashcardFromMcqMutation.isPending} className="p-1 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700" title="Create Flashcard from MCQ">
+                                <DocumentPlusIcon className="h-6 w-6 text-emerald-500" />
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -476,7 +505,7 @@ const MCQSessionPage: React.FC = () => {
                         <div className="space-y-3">
                             {currentMcq.options.map((option, idx) => {
                                 const isSelected = (mode === 'quiz' || mode === 'mock') ? quizModeSelectedAnswer === option : userSelectedAnswer === option;
-                                const isCorrectOption = option === correctAnswer;
+                                const isCorrectOption = option === getCorrectAnswerText(currentMcq);
 
                                 return (
                                     <button

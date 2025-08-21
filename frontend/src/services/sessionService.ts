@@ -1,3 +1,4 @@
+// frontend/services/sessionService.ts
 import { doc, setDoc, getDoc, deleteDoc, serverTimestamp, Timestamp, collection, updateDoc, runTransaction, query, where, deleteField, getDocs } from 'firebase/firestore';
 import { db } from '@/firebase';
 import { QuizSession, Attempt } from '@pediaquiz/types'; // Removed 'type' prefix for direct usage

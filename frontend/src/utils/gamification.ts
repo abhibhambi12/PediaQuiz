@@ -40,7 +40,6 @@ export const calculateLevelProgress = (currentXp: number, currentLevel: number) 
 
     // The amount of XP needed to reach the *next* level (e.g., to go from level 1 to level 2).
     // This is `(current level + 1) * BASE_XP_PER_LEVEL_THRESHOLD`.
-    // Example: If currentLevel is 1, then xpForNextLevel is (1+1)*500 = 1000.
     // No, this is XP for the *next band* of XP.
     // The previous loop already correctly finds the current level.
     // The XP needed for the *next* level, from 0 of that level's band, is `calculatedLevel * BASE_XP_PER_LEVEL_THRESHOLD`.

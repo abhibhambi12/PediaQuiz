@@ -1,3 +1,4 @@
+// frontend/utils/helpers.ts
 // frontend/src/utils/helpers.ts
 // FILE: frontend/src/utils/helpers.ts
 // This file can contain reusable helper functions.
