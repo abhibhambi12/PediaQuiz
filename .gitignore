@@ -1,3 +1,4 @@
+# .gitignore
 # Environment variables for frontend.
 # The .env file in the frontend/ directory is sensitive and should not be committed.
 frontend/.env
@@ -8,6 +9,8 @@ node_modules
 # Generated build artifacts
 dist
 lib
+functions/lib/
+functions/dist/
 
 # IDE and OS files
 .DS_Store
@@ -25,7 +28,7 @@ firebase-debug.*.log
 
 # Monorepo build artifacts
 # CRITICAL: This path needs to be correct for the monorepo structure.
-workspaces/functions/dist/
+functions/dist/
 
 # Emulator specific configurations (if containing secrets)
 # apphosting.emulator.yaml (if secrets are plain text, but secrets should be in Secret Manager)

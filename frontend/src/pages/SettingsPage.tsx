@@ -1,195 +1,139 @@
-// frontend/pages/SettingsPage.tsx
-// frontend/pages/SettingsPage.tsx
-import React, { useState, useMemo, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import { useToast } from '../components/Toast';
+// frontend/src/pages/SettingsPage.tsx
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useSettings } from '@/contexts/SettingsContext';
+import { useToast } from '@/components/Toast';
 import ConfirmationModal from '@/components/ConfirmationModal';
-import { updateTheme } from '@/services/aiService'; // Import the callable function for theme updates
+import Loader from '@/components/Loader';
+import { updateEmail, updatePassword, deleteUserAccount } from '@/services/apiService';
 
 const SettingsPage: React.FC = () => {
     const { user, updateUserDoc, logout } = useAuth();
+    const { state: settingsState, dispatch: settingsDispatch } = useSettings();
     const { addToast } = useToast();
-    const [isConfirmLogoutOpen, setIsConfirmLogoutOpen] = useState(false);
-    const [selectedTheme, setSelectedTheme] = useState(user?.theme || 'default');
 
-    // Define available themes with their unlock requirements
-    const availableThemes = useMemo(() => ([
-        { id: 'default', name: 'Default (Light/Dark)', requiredLevel: 1 },
-        { id: 'ocean-blue', name: 'Ocean Blue', requiredLevel: 5 }, // Unlocked at Level 5
-        { id: 'forest-green', name: 'Forest Green', requiredLevel: 10 }, // Unlocked at Level 10
-    ]), []);
+    const [displayName, setDisplayName] = useState('');
+    const [newEmail, setNewEmail] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [notificationSettings, setNotificationSettings] = useState(user?.notificationSettings || {});
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [modalAction, setModalAction] = useState<'security' | 'delete' | 'logout' | null>(null);
 
-    const handleUpdateProfile = async (e: React.FormEvent) => {
-        e.preventDefault();
-        const form = e.target as HTMLFormElement;
-        const displayNameInput = form.elements.namedItem('displayName') as HTMLInputElement;
-        const displayName = displayNameInput.value;
-
-        if (!displayName.trim()) {
-            addToast("Display name cannot be empty.", "error");
-            return;
-        }
-
-        try {
-            // Call updateUserDoc from AuthContext to update Firestore user document
-            await updateUserDoc({ displayName });
-            addToast("Profile updated successfully!", "success");
-        } catch (error: any) {
-            addToast(`Failed to update profile: ${error.message}`, "error");
-            console.error('Failed to update profile:', error);
-        }
-    };
-
-    const confirmLogout = () => {
-        setIsConfirmLogoutOpen(true);
-    };
-
-    const handleLogout = async () => {
-        await logout(); // Calls logout from AuthContext
-        addToast("Logged out successfully!", "success");
-        setIsConfirmLogoutOpen(false);
-    };
-
-    // Handle theme change logic (Feature #1.1 fix)
-    const handleThemeChange = async (event: React.ChangeEvent<HTMLSelectElement>) => {
-        const newTheme = event.target.value;
-        const themeOption = availableThemes.find(theme => theme.id === newTheme);
-        const currentUserLevel = user?.level ?? 1;
-
-        // Check if theme is unlocked
-        if (themeOption?.requiredLevel && currentUserLevel < themeOption.requiredLevel) {
-            addToast(`Theme "${themeOption.name}" requires Level ${themeOption.requiredLevel}. You are Level ${currentUserLevel}.`, "warning");
-            setSelectedTheme(user?.theme || 'default'); // Revert selection to current user theme
-            return;
-        }
-
-        setSelectedTheme(newTheme); // Optimistic update of UI
-        try {
-            // Call backend callable function to update theme in Firestore
-            await updateTheme({ themeName: newTheme });
-
-            // CRITICAL FIX: Apply theme to HTML element by toggling 'dark' class based on themeName
-            // This assumes 'default' is light mode and others are dark mode variants.
-            // For more complex themes (e.g., 'ocean-blue' being a specific color scheme class),
-            // you'd manage those classes explicitly.
-            if (newTheme === 'default') {
-                document.documentElement.classList.remove('dark');
-                document.documentElement.removeAttribute('data-theme'); // Remove any custom theme attribute
-            } else {
-                document.documentElement.classList.add('dark'); // Enable dark mode styles
-                // Add a data-theme attribute or specific class for visual variants if needed
-                // document.documentElement.setAttribute('data-theme', newTheme); // Example for custom theming
-            }
-
-            addToast(`Theme updated to ${themeOption?.name || newTheme}!`, "success");
-        } catch (error: any) {
-            addToast(`Failed to update theme: ${error.message}`, "error");
-            setSelectedTheme(user?.theme || 'default'); // Revert selection on error
-            console.error('Failed to update theme:', error);
-        }
-    };
-
-    // Apply theme on component mount based on user's current theme from Firestore
     useEffect(() => {
-        if (user?.theme) {
-            // CRITICAL FIX: Apply initial theme using classList based on user's saved preference
-            if (user.theme === 'default') {
-                document.documentElement.classList.remove('dark');
-            } else {
-                document.documentElement.classList.add('dark');
-                // If you had complex custom theme classes, they would be applied here
-                // document.documentElement.setAttribute('data-theme', user.theme); 
-            }
-            setSelectedTheme(user.theme);
+        if (user) {
+            setDisplayName(user.displayName || '');
+            setNewEmail(user.email || '');
+            setNotificationSettings(user.notificationSettings || {});
         }
-    }, [user?.theme]);
+    }, [user]);
 
+    const handleProfileUpdate = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!user || (displayName.trim() === user.displayName && JSON.stringify(notificationSettings) === JSON.stringify(user.notificationSettings))) return;
+        setIsProcessing(true);
+        try {
+            await updateUserDoc({ displayName: displayName.trim(), notificationSettings });
+            addToast("Profile updated!", "success");
+        } catch (error: any) { addToast(`Update failed: ${error.message}`, "error"); }
+        finally { setIsProcessing(false); }
+    };
+
+    const handleConfirmAction = async (passwordInput?: string) => {
+        if (!passwordInput && modalAction !== 'logout') {
+            addToast("Password confirmation is required.", "error");
+            return;
+        }
+        setIsProcessing(true);
+        try {
+            switch (modalAction) {
+                case 'security':
+                    if (newEmail !== user?.email) await updateEmail({ newEmail, password: passwordInput! });
+                    if (newPassword) await updatePassword({ newPassword, currentPassword: passwordInput! });
+                    addToast("Security settings updated. Please re-login.", "success");
+                    await logout();
+                    break;
+                case 'delete':
+                    await deleteUserAccount({ password: passwordInput! });
+                    addToast("Account deleted successfully.", "success");
+                    break;
+                case 'logout':
+                    await logout();
+                    break;
+            }
+        } catch (error: any) { addToast(`Action failed: ${error.message}`, "error"); }
+        finally {
+            setIsProcessing(false);
+            setModalAction(null);
+            setNewPassword('');
+        }
+    };
+
+    const handleThemeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+        settingsDispatch({ type: 'SET_THEME', payload: e.target.value as 'light' | 'dark' | 'system' });
+    };
+
+    if (!user) return <Loader fullScreen />;
 
     return (
-        <div className="p-6 max-w-2xl mx-auto">
-            <h1 className="text-3xl font-bold mb-6 text-slate-800 dark:text-slate-50">Settings</h1>
-            <div className="card-base p-6 mb-6">
-                <h2 className="text-xl font-semibold mb-4 text-slate-700 dark:text-slate-300">Profile Information</h2>
-                <form onSubmit={handleUpdateProfile} className="space-y-4">
-                    <div>
-                        <label htmlFor="displayName" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                            Display Name
-                        </label>
-                        <input
-                            id="displayName"
-                            type="text"
-                            name="displayName"
-                            defaultValue={user?.displayName || ''}
-                            className="input-field"
-                            required
-                        />
-                    </div>
-                    <button
-                        type="submit"
-                        className="btn-primary"
-                    >
-                        Update Profile
-                    </button>
-                </form>
-            </div>
-
-            <div className="card-base p-6 mb-6">
-                <h2 className="text-xl font-semibold mb-4 text-slate-700 dark:text-slate-300">Display Settings</h2>
+        <div className="p-6 max-w-2xl mx-auto space-y-6">
+            <h1 className="text-3xl font-bold">Settings</h1>
+            
+            <form onSubmit={handleProfileUpdate} className="card-base p-6 space-y-4">
+                <h2 className="text-xl font-semibold mb-2">Profile & Notifications</h2>
                 <div>
-                    <label htmlFor="themeSelect" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                        App Theme
-                    </label>
-                    <select
-                        id="themeSelect"
-                        className="input-field"
-                        value={selectedTheme}
-                        onChange={handleThemeChange}
-                    >
-                        {availableThemes.map(theme => (
-                            <option
-                                key={theme.id}
-                                value={theme.id}
-                                disabled={!!(theme.requiredLevel && (user?.level ?? 1) < theme.requiredLevel)}
-                            >
-                                {theme.name} {theme.requiredLevel && theme.requiredLevel > 1 && `(Level ${theme.requiredLevel})`}
-                            </option>
-                        ))}
-                    </select>
+                    <label htmlFor="displayName" className="block text-sm font-medium">Display Name</label>
+                    <input id="displayName" type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="input-field mt-1" disabled={isProcessing} />
                 </div>
-            </div>
-
-            {user?.badges && user.badges.length > 0 && (
-                <div className="card-base p-6 mb-6">
-                    <h2 className="text-xl font-semibold mb-4 text-slate-700 dark:text-slate-300">Your Badges</h2>
-                    <div className="flex flex-wrap gap-2">
-                        {user.badges.map(badge => (
-                            <span key={badge} className="px-3 py-1 rounded-full text-sm font-medium bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300">
-                                {badge}
-                            </span>
-                        ))}
+                <div>
+                    <label className="block text-sm font-medium">Notification Preferences</label>
+                    <div className="mt-2 space-y-2">
+                         <label className="flex items-center gap-2"><input type="checkbox" className="form-checkbox" checked={notificationSettings.studyReminders || false} onChange={e => setNotificationSettings(s => ({...s, studyReminders: e.target.checked}))} /> Study Reminders</label>
+                         <label className="flex items-center gap-2"><input type="checkbox" className="form-checkbox" checked={notificationSettings.newContent || false} onChange={e => setNotificationSettings(s => ({...s, newContent: e.target.checked}))} /> New Content Alerts</label>
                     </div>
                 </div>
-            )}
+                <button type="submit" className="btn-primary" disabled={isProcessing}>Save Profile</button>
+            </form>
+
+            <div className="card-base p-6 space-y-4">
+                 <h2 className="text-xl font-semibold mb-2">Security</h2>
+                 <div>
+                    <label htmlFor="newEmail" className="block text-sm font-medium">Email Address (current: {user.email})</label>
+                    <input id="newEmail" type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} className="input-field mt-1" />
+                </div>
+                <div>
+                    <label htmlFor="newPassword">New Password</label>
+                    <input id="newPassword" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Leave blank to keep current password" className="input-field mt-1" />
+                </div>
+                <button onClick={() => setModalAction('security')} className="btn-secondary" disabled={isProcessing}>Save Security Changes</button>
+            </div>
 
             <div className="card-base p-6">
-                <h2 className="text-xl font-semibold mb-4 text-slate-700 dark:text-slate-300">Account Actions</h2>
-                <button
-                    onClick={confirmLogout}
-                    className="btn-danger"
-                >
-                    Sign Out
-                </button>
+                <h2 className="text-xl font-semibold mb-4">Display</h2>
+                <label htmlFor="themeSelect" className="block text-sm font-medium mb-1">App Theme</label>
+                <select id="themeSelect" className="input-field" value={settingsState.theme} onChange={handleThemeChange} disabled={isProcessing}>
+                    <option value="system">System Default</option>
+                    <option value="light">Light</option>
+                    <option value="dark">Dark</option>
+                </select>
+            </div>
+            
+            <div className="card-base p-6 bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800">
+                <h2 className="text-xl font-semibold mb-4 text-red-700 dark:text-red-300">Account Actions</h2>
+                <button onClick={() => setModalAction('logout')} className="btn-neutral mr-3">Sign Out</button>
+                <button onClick={() => setModalAction('delete')} className="btn-danger">Delete Account</button>
             </div>
 
-            <ConfirmationModal
-                isOpen={isConfirmLogoutOpen}
-                onClose={() => setIsConfirmLogoutOpen(false)}
-                onConfirm={handleLogout}
-                title="Confirm Logout"
-                message="Are you sure you want to sign out?"
+            <ConfirmationModal 
+                isOpen={!!modalAction}
+                onClose={() => setModalAction(null)} 
+                onConfirm={handleConfirmAction}
+                title={`Confirm ${modalAction}`}
+                message={modalAction === 'logout' ? 'Are you sure you want to sign out?' : 'For your security, please enter your current password to confirm this action.'}
+                isInputModal={modalAction !== 'logout'}
+                isLoading={isProcessing}
+                variant={modalAction === 'delete' ? 'danger' : 'confirm'}
             />
         </div>
     );
 };
-
 export default SettingsPage;

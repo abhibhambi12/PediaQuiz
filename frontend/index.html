@@ -2,15 +2,18 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <!-- Replaced default Vite icon with PediaQuiz themed icon path -->
-    <link rel="icon" type="image/svg+xml" href="/pediaquiz-logo.svg" /> 
+    <link rel="icon" type="image/svg+xml" href="/pediaquiz-logo.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    
+    <!-- PWA and Mobile Specific Meta Tags -->
+    <meta name="theme-color" content="#0ea5e9" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+
     <title>PediaQuiz</title>
   </head>
-  <!-- Added dynamic dark/light mode classes based on TailwindCSS setup -->
   <body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 antialiased">
     <div id="root"></div>
-    <!-- The main TypeScript entry point for the React application -->
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

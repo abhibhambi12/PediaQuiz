@@ -1,8 +1,7 @@
-// frontend/src/components/GenerationJobCard.tsx
 import React from 'react';
-// Direct type import
 import { UserUpload } from '@pediaquiz/types';
-import { Timestamp } from 'firebase/firestore'; // Import Timestamp for date handling
+import { safeToDate } from '@/utils/dateUtils';
+import clsx from 'clsx';
 
 interface GenerationJobCardProps {
   job: UserUpload;
@@ -10,22 +9,29 @@ interface GenerationJobCardProps {
 }
 
 const GenerationJobCard: React.FC<GenerationJobCardProps> = ({ job, onSelect }) => {
-  // Ensure createdAtDate is a proper Date object regardless of source (Date or Firestore Timestamp)
-  const createdAtDate = (job.createdAt instanceof Date)
-    ? job.createdAt
-    : (job.createdAt as any)?.toDate
-      ? (job.createdAt as any).toDate()
-      : new Date(); // Fallback to current date if neither
+  const statusColor = {
+    completed: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+    error: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+    generating_batch: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300',
+    pending_approval: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300',
+    default: 'bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300',
+  };
+
+  const colorClass = statusColor[job.status as keyof typeof statusColor] || statusColor.default;
 
   return (
     <div
-      className="p-4 bg-white dark:bg-slate-800 rounded-lg shadow-md cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700"
+      className="card-base p-4 cursor-pointer hover:shadow-md transition-shadow"
       onClick={() => onSelect(job.id)}
     >
-      <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-50">{job.title || job.fileName}</h3>
-      <p className="text-sm text-slate-600 dark:text-slate-400">Status: {job.status}</p>
-      <p className="text-sm text-slate-600 dark:text-slate-400">
-        Created: {createdAtDate.toLocaleDateString()}
+      <div className="flex justify-between items-start">
+        <h3 className="font-bold text-lg flex-1 truncate pr-2">{job.title || job.fileName}</h3>
+        <span className={clsx("text-xs font-semibold px-2 py-1 rounded-full whitespace-nowrap", colorClass)}>
+          {job.status.replace(/_/g, ' ')}
+        </span>
+      </div>
+      <p className="text-sm text-slate-500 mt-1">
+        Created: {safeToDate(job.createdAt).toLocaleDateString()}
       </p>
     </div>
   );

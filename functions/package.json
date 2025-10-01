@@ -1,18 +1,22 @@
 {
   "name": "@pediaquiz/functions",
-  "scripts": {
-    "build": "npx tsc --build",
-    "lint": "eslint --ext .js,.ts .",
-    "serve": "npm run build && firebase emulators:start --only functions",
-    "deploy": "firebase deploy --only functions",
-    "logs": "firebase functions:log"
-  },
+  "version": "1.0.0",
+  "private": true,
+  "description": "Firebase Functions for PediaQuiz",
+  "main": "lib/index.js",
   "engines": {
     "node": "20"
   },
-  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc --build",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "shell": "npm run build && firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
   "dependencies": {
-    "@google-cloud/vertexai": "^1.1.0",
+    "@google-cloud/vertexai": "^1.2.0",
     "@google-cloud/vision": "^4.3.0",
     "@pediaquiz/types": "file:../packages/types",
     "firebase-admin": "^12.2.0",
@@ -21,7 +25,6 @@
   },
   "devDependencies": {
     "@types/node": "^20.14.9",
-    "typescript": "^5.4.5"
-  },
-  "private": true
+    "typescript": "^5.5.4"
+  }
 }

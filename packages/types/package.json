@@ -8,12 +8,13 @@
     "lib"
   ],
   "scripts": {
-    "build": "npx tsc --build"
+    "build": "tsc --build"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
+    "firebase-admin": "^12.2.0",
     "typescript": "^5.4.5"
   }
 }

@@ -1,131 +1,88 @@
-// frontend/src/pages/ChatPage.tsx
-import React, { useState, useEffect } from 'react';
-import { chatWithAssistant } from '../services/aiService'; // Assuming this service function exists
-import { useAuth } from '@/contexts/AuthContext'; // To get user info if needed for context
-import { ChatMessage } from '@pediaquiz/types'; // Import ChatMessage type
-import { useToast } from '@/components/Toast'; // For user feedback
-
-const ChatPage: React.FC = () => {
-  // State for messages and user input
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false); // Loading indicator for AI response
-  const { user } = useAuth(); // Get user details if needed
-  const { addToast } = useToast(); // For error messages
-
-  // Scroll to bottom when new messages are added
-  useEffect(() => {
-    const chatContainer = document.getElementById('chat-messages');
-    if (chatContainer) {
-      chatContainer.scrollTop = chatContainer.scrollHeight;
-    }
-  }, [messages]);
-
-  // Handler for sending a message
-  const handleSend = async () => {
-    const trimmedInput = input.trim();
-    if (!trimmedInput) return; // Do not send empty messages
-
-    // Add user message to the chat
-    const newUserMessage: ChatMessage = {
-      id: Date.now().toString(), // Simple unique ID
-      text: trimmedInput,
-      sender: 'user',
-      timestamp: new Date(),
-    };
-    setMessages(prevMessages => [...prevMessages, newUserMessage]);
-    setInput(''); // Clear input field
-    setIsLoading(true); // Show loading indicator
-
-    try {
-      // Send message to AI service
-      // Pass history to AI for context
-      const aiResponse = await chatWithAssistant({ prompt: trimmedInput, history: messages });
-
-      // Add AI response to the chat
-      const aiMessage: ChatMessage = {
-        id: Date.now().toString() + '_ai', // Another simple unique ID
-        text: aiResponse.data.response || "I couldn't generate a response. Please try again.",
-        sender: 'assistant',
-        timestamp: new Date(),
+    import React, { useState, useEffect, useRef } from 'react';
+    import { chatWithAssistant } from '@/services/aiService';
+    import { useAuth } from '@/contexts/AuthContext';
+    import { ChatMessage } from '@pediaquiz/types';
+    import { useToast } from '@/components/Toast';
+    import { PaperAirplaneIcon } from '@heroicons/react/24/solid';
+    import ReactMarkdown from 'react-markdown';
+    
+    const ChatPage: React.FC = () => {
+      const [messages, setMessages] = useState<ChatMessage[]>([]);
+      const [input, setInput] = useState('');
+      const [isLoading, setIsLoading] = useState(false);
+      const { user } = useAuth();
+      const { addToast } = useToast();
+      const messagesEndRef = useRef<HTMLDivElement>(null);
+    
+      const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
       };
-      setMessages(prevMessages => [...prevMessages, aiMessage]);
-    } catch (error: any) {
-      console.error('AI chat error:', error);
-      addToast(`Failed to get response from AI: ${error.message}`, "error");
-      // Optionally add an error message to the chat display
-      const errorMessage: ChatMessage = {
-        id: Date.now().toString() + '_error',
-        text: `Error: ${error.message || 'Failed to get response.'}`,
-        sender: 'assistant',
-        timestamp: new Date(),
+    
+      useEffect(scrollToBottom, [messages]);
+    
+      const handleSend = async () => {
+        const trimmedInput = input.trim();
+        if (!trimmedInput || !user) {
+            if (!user) addToast("Please log in to chat.", "error");
+            return;
+        }
+    
+        const newUserMessage: ChatMessage = {
+          id: Date.now().toString(),
+          text: trimmedInput,
+          sender: 'user',
+          timestamp: new Date(),
+        };
+        setMessages(prevMessages => [...prevMessages, newUserMessage]);
+        setInput('');
+        setIsLoading(true);
+    
+        try {
+          const aiResponse = await chatWithAssistant({ prompt: trimmedInput, history: messages });
+    
+          const aiMessage: ChatMessage = {
+            id: Date.now().toString() + '_ai',
+            text: aiResponse.data.response || "I couldn't generate a response. Please try again.",
+            sender: 'assistant',
+            timestamp: new Date(),
+          };
+          setMessages(prevMessages => [...prevMessages, aiMessage]);
+        } catch (error: any) {
+          addToast(`AI chat error: ${error.message}`, 'error');
+        } finally {
+          setIsLoading(false);
+        }
       };
-      setMessages(prevMessages => [...prevMessages, errorMessage]);
-    } finally {
-      setIsLoading(false); // Hide loading indicator
-    }
-  };
-
-  // Handle Enter key press for sending message
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') {
-      handleSend();
-    }
-  };
-
-  return (
-    <div className="p-6 flex flex-col h-[calc(100vh-120px)] max-h-[80vh]"> {/* Adjust height to account for header/footer */}
-      <h1 className="text-2xl font-bold mb-4">AI Assistant Chat</h1>
-      {/* Message display area */}
-      <div id="chat-messages" className="flex-1 overflow-y-auto p-3 bg-gray-50 dark:bg-slate-800 rounded-lg mb-4 border border-gray-200 dark:border-gray-700" style={{ scrollBehavior: 'smooth' }}>
-        {messages.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-center text-gray-500 dark:text-gray-400">
-            <p>Start chatting with the AI assistant!</p>
+    
+      return (
+        <div className="flex flex-col h-[calc(100vh-200px)] max-w-3xl mx-auto">
+          <h1 className="text-3xl font-bold mb-4">AI Study Assistant</h1>
+          <div className="flex-1 overflow-y-auto p-4 bg-white dark:bg-slate-800 rounded-lg shadow-inner mb-4">
+            {messages.map((msg) => (
+              <div key={msg.id} className={`flex my-3 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`p-3 rounded-lg max-w-lg ${msg.sender === 'user' ? 'bg-sky-500 text-white' : 'bg-slate-200 dark:bg-slate-700'}`}>
+                  <ReactMarkdown className="prose dark:prose-invert prose-p:my-0">{msg.text}</ReactMarkdown>
+                </div>
+              </div>
+            ))}
+            <div ref={messagesEndRef} />
           </div>
-        ) : (
-          messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`my-3 p-3 rounded-lg max-w-3/4 w-fit ${msg.sender === 'user'
-                  ? 'ml-auto bg-sky-100 dark:bg-sky-900 text-sky-800 dark:text-sky-200'
-                  : 'mr-auto bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
-                }
-                            ${msg.sender === 'user' ? 'shadow-md' : 'shadow-sm'}`}
-            >
-              {msg.text}
-              <span className="block text-xs text-right mt-1 text-gray-500 dark:text-gray-400">
-                {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </span>
-            </div>
-          ))
-        )}
-      </div>
-      {/* Input area */}
-      <div className="flex items-center mt-auto">
-        <input
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyPress={handleKeyPress} // Handle Enter key
-          placeholder="Type your message..."
-          className="flex-1 p-3 border border-gray-300 dark:border-gray-600 rounded-l-lg focus:outline-none focus:ring-2 focus:ring-sky-500 dark:bg-slate-700 dark:text-white"
-          aria-label="Chat input"
-        />
-        <button
-          onClick={handleSend}
-          disabled={!input.trim() || isLoading} // Disable if input is empty or AI is loading
-          className={`px-5 py-3 bg-sky-600 text-white rounded-r-lg font-semibold transition-colors duration-200
-                      ${!input.trim() || isLoading
-              ? 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed'
-              : 'hover:bg-sky-700 dark:hover:bg-sky-500'
-            }`}
-          aria-label="Send message"
-        >
-          {isLoading ? 'Sending...' : 'Send'}
-        </button>
-      </div>
-    </div>
-  );
-};
-
-export default ChatPage;
+          <div className="flex items-center">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && !isLoading && handleSend()}
+              placeholder="Ask me anything about your studies..."
+              className="input-field flex-1"
+              disabled={isLoading}
+            />
+            <button onClick={handleSend} disabled={!input.trim() || isLoading} className="btn-primary ml-2 p-3">
+              <PaperAirplaneIcon className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+      );
+    };
+    
+    export default ChatPage;

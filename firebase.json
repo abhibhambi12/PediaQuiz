@@ -1,9 +1,15 @@
 {
   "functions": [
     {
-      "source": "workspaces/functions/dist",
+      "source": "functions",
       "codebase": "default",
-      "ignore": [],
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.tsbuildinfo"
+      ],
       "runtime": "nodejs20"
     }
   ],

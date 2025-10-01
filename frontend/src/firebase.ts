@@ -1,57 +1,63 @@
 // frontend/src/firebase.ts
-// frontend/src/firebase.ts
-// MODIFIED: Corrected environment variable access for Vite (`import.meta.env`).
-//           Corrected `getFunctions` initialization.
-//           Ensured offline persistence is enabled.
-
 import { initializeApp, FirebaseApp } from 'firebase/app';
-import { getAuth, Auth } from 'firebase/auth';
-import { getFirestore, Firestore, enableIndexedDbPersistence } from 'firebase/firestore';
-import { getStorage, FirebaseStorage } from 'firebase/storage';
-import { getFunctions, Functions } from 'firebase/functions'; // Corrected import for getFunctions
+import { getAuth, Auth, connectAuthEmulator } from 'firebase/auth';
+import { getFirestore, Firestore, enableIndexedDbPersistence, connectFirestoreEmulator } from 'firebase/firestore';
+import { getStorage, FirebaseStorage, connectStorageEmulator } from 'firebase/storage';
+import { getFunctions, Functions, connectFunctionsEmulator } from 'firebase/functions';
+import { getPerformance } from 'firebase/performance';
+import { getAnalytics } from 'firebase/analytics';
 
-// Firebase configuration from environment variables
 const firebaseConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
     authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
     projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+    storageBucket: "pediaquizapp.firebasestorage.app", // Enforced value
     messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
     appId: import.meta.env.VITE_FIREBASE_APP_ID,
     measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
-// Basic validation for Firebase config to ensure .env variables are loaded
-if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "undefined") {
-    throw new Error("Firebase API Key (VITE_FIREBASE_API_KEY) is missing. Check your .env configuration.");
-}
-if (!firebaseConfig.projectId || firebaseConfig.projectId === "undefined") {
-    throw new Error("Firebase Project ID (VITE_FIREBASE_PROJECT_ID) is missing. Check your .env configuration.");
+if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+    console.error(
+        "FATAL ERROR: Firebase configuration is missing. Ensure your `frontend/.env` file is correctly populated."
+    );
 }
 
-
-// Initialize Firebase App
 export const app: FirebaseApp = initializeApp(firebaseConfig);
-
-// Initialize Firebase services
 export const auth: Auth = getAuth(app);
 export const db: Firestore = getFirestore(app);
 export const storage: FirebaseStorage = getStorage(app);
-// Initialize Cloud Functions with the correct region
-export const functions: Functions = getFunctions(app, 'us-central1'); // Correct usage of getFunctions with region
+export const functions: Functions = getFunctions(app, 'us-central1');
 
-// Enable Firestore offline persistence
-enableIndexedDbPersistence(db)
-    .then(() => {
-        console.log("Firestore offline persistence enabled successfully.");
-    })
-    .catch((err) => {
-        // Handle persistence errors more gracefully for the user
+// Initialize Performance Monitoring and Analytics
+getPerformance(app);
+getAnalytics(app);
+
+if (import.meta.env.DEV) {
+    console.log("Development mode: Connecting to Firebase Emulators.");
+    const emulatorHost = '127.0.0.1'; 
+    try {
+        connectAuthEmulator(auth, `http://${emulatorHost}:9099`);
+        connectFirestoreEmulator(db, emulatorHost, 8080);
+        connectStorageEmulator(storage, emulatorHost, 9199);
+        connectFunctionsEmulator(functions, emulatorHost, 5001);
+    } catch (e) { 
+        console.warn("Could not connect to one or more Firebase Emulators. Make sure they are running.", e); 
+    }
+}
+
+// Enable Firestore offline persistence for PWA capabilities
+const setupFirestorePersistence = async () => {
+    try {
+        await enableIndexedDbPersistence(db);
+        console.log("Firestore offline persistence enabled.");
+    } catch (err: any) {
         if (err.code === 'failed-precondition') {
-            console.warn("Firestore persistence failed to enable: Multiple tabs open or previous uncleaned state. Persistence will be disabled for this tab.", err);
+            console.warn("Firestore persistence failed: Multiple tabs open. Persistence will be disabled for this tab.");
         } else if (err.code === 'unimplemented') {
-            console.warn("Firestore persistence unimplemented: Browser does not support indexedDB. Persistence will be disabled.", err);
-        } else {
-            console.error("Firestore persistence failed with an unexpected error:", err);
+            console.warn("Firestore persistence failed: Browser does not support IndexedDB.");
         }
-    });
+    }
+};
+
+setupFirestorePersistence();

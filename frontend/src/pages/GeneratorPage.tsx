@@ -1,119 +1,67 @@
-// frontend/src/pages/GeneratorPage.tsx
 import React, { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/firebase';
-import Loader from '@/components/Loader';
+import { ref, uploadBytes } from 'firebase/storage';
+import { storage } from '@/firebase';
 import { useToast } from '@/components/Toast';
-import { useAuth } from '@/contexts/AuthContext'; // To get userId for job creation
-// Direct type import
-import { ProcessManualTextInputCallableData } from '@pediaquiz/types';
-
-// Callable function to process manual text input (backend function: processManualTextInput)
-const processManualTextInputFn = httpsCallable<ProcessManualTextInputCallableData, { success: boolean, uploadId: string, message: string }>(functions, 'processManualTextInput');
+import { useAuth } from '@/contexts/AuthContext';
+import { CloudArrowUpIcon } from '@heroicons/react/24/outline';
+import { useNavigate } from 'react-router-dom';
 
 const GeneratorPage: React.FC = () => {
     const { user } = useAuth();
-    const [title, setTitle] = useState('');
-    const [rawText, setRawText] = useState('');
-    const [isMarrowContent, setIsMarrowContent] = useState(false);
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [isProcessing, setIsProcessing] = useState(false);
     const { addToast } = useToast();
-    const queryClient = useQueryClient();
+    const navigate = useNavigate();
 
-    const processTextInputMutation = useMutation({
-        mutationFn: (data: { fileName: string, rawText: string, isMarrow: boolean }) => {
-            return processManualTextInputFn({ fileName: data.fileName, rawText: data.rawText, isMarrow: data.isMarrow });
-        },
-        onSuccess: (data) => {
-            addToast(data.data.message, 'success');
-            setTitle('');
-            setRawText('');
-            setIsMarrowContent(false);
-            // Invalidate admin job queries to show the new job in the dashboard
-            queryClient.invalidateQueries({ queryKey: ['pendingUploads'] });
-            queryClient.invalidateQueries({ queryKey: ['marrowUploads'] });
-        },
-        onError: (error: any) => {
-            console.error('Failed to process text input:', error);
-            addToast(`Failed to submit content: ${error.message}`, 'error');
-        },
-    });
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files?.[0]) {
+            const file = e.target.files[0];
+            if (file.type !== 'application/pdf') {
+                addToast('Invalid file type. Please upload a PDF.', 'error');
+                return;
+            }
+            if (file.size > 40 * 1024 * 1024) { // 40MB limit
+                addToast('File is too large. Maximum size is 40MB.', 'error');
+                return;
+            }
+            setSelectedFile(file);
+        }
+    };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!rawText.trim()) {
-            addToast("Text content cannot be empty.", "error");
-            return;
+        if (!user || !selectedFile) {
+            return addToast("A PDF file is required.", "error");
         }
-        if (!title.trim()) {
-            addToast("A title for the content is required.", "error");
-            return;
+        setIsProcessing(true);
+        
+        const storageRef = ref(storage, `uploads/${user.uid}/${Date.now()}_${selectedFile.name}`);
+        try {
+            const metadata = { customMetadata: { owner: user.uid } };
+            await uploadBytes(storageRef, selectedFile, metadata);
+            addToast("File uploaded successfully! Processing has begun.", "success");
+            navigate('/admin/review'); // Redirect to see the job status
+        } catch (error: any) { 
+            addToast(`File upload failed: ${error.message}`, "error"); 
+            setIsProcessing(false);
         }
-        if (!user) {
-            addToast("You must be logged in to submit content.", "error");
-            return;
-        }
-
-        processTextInputMutation.mutate({
-            fileName: title.trim(), // Use title as filename for text input
-            rawText: rawText.trim(),
-            isMarrow: isMarrowContent,
-        });
     };
 
     return (
         <div className="p-6 max-w-3xl mx-auto">
-            <h1 className="text-3xl font-bold mb-6 text-slate-800 dark:text-slate-50">Content Uploader & Manual Input</h1>
-
+            <h1 className="text-3xl font-bold mb-6">Content Uploader</h1>
             <form onSubmit={handleSubmit} className="card-base p-6 space-y-4">
-                <div>
-                    <label htmlFor="contentTitle" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Content Title (for job tracking)</label>
-                    <input
-                        id="contentTitle"
-                        type="text"
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
-                        placeholder="e.g., Pediatric Cardiology Notes"
-                        className="input-field"
-                        disabled={processTextInputMutation.isPending}
-                        required
-                    />
-                </div>
-                <div>
-                    <label htmlFor="rawTextInput" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Paste Raw Text Content</label>
-                    <textarea
-                        id="rawTextInput"
-                        value={rawText}
-                        onChange={(e) => setRawText(e.target.value)}
-                        className="input-field h-64 resize-y"
-                        placeholder="Paste your medical notes, Marrow explanations, or general text here."
-                        disabled={processTextInputMutation.isPending}
-                        required
-                    />
-                </div>
-                <div className="flex items-center">
-                    <input
-                        id="isMarrowContent"
-                        type="checkbox"
-                        checked={isMarrowContent}
-                        onChange={(e) => setIsMarrowContent(e.target.checked)}
-                        className="h-4 w-4 text-sky-600 focus:ring-sky-500 border-gray-300 rounded"
-                        disabled={processTextInputMutation.isPending}
-                    />
-                    <label htmlFor="isMarrowContent" className="ml-2 block text-sm text-slate-700 dark:text-slate-300">
-                        Is this Marrow-specific content (for Marrow pipeline)?
-                    </label>
-                </div>
-                <button
-                    type="submit"
-                    className="btn-primary w-full"
-                    disabled={processTextInputMutation.isPending || !rawText.trim() || !title.trim()}
-                >
-                    {processTextInputMutation.isPending ? <Loader message="Submitting..." /> : 'Submit for AI Processing'}
+                <label htmlFor="file-upload" className="flex flex-col items-center justify-center p-10 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                    <CloudArrowUpIcon className="h-12 w-12 text-sky-500 mb-2" />
+                    <span className="font-semibold text-slate-700 dark:text-slate-300">{selectedFile ? `File: ${selectedFile.name}` : 'Click or Drag & Drop to Upload PDF'}</span>
+                    <p className="text-sm text-slate-500">Max file size: 40MB</p>
+                    <input id="file-upload" type="file" accept=".pdf" onChange={handleFileChange} className="sr-only" />
+                </label>
+                <button type="submit" className="btn-primary w-full" disabled={isProcessing || !selectedFile}>
+                    {isProcessing ? 'Uploading...' : 'Upload & Process'}
                 </button>
             </form>
         </div>
     );
 };
-
 export default GeneratorPage;

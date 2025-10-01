@@ -1,30 +1,18 @@
-// frontend/utils/helpers.ts
-// frontend/src/utils/helpers.ts
-// FILE: frontend/src/utils/helpers.ts
-// This file can contain reusable helper functions.
-// CRITICAL FIX: Ensure normalizeId is explicitly exported.
-
 /**
- * Normalizes a given string name into a Firebase-friendly document ID.
- * This replaces spaces with underscores, converts to lowercase, and removes
- * any characters that are not alphanumeric or underscores.
- * @param name - The input string name (e.g., "Pediatric Cardiology").
- * @returns A normalized string suitable for document IDs (e.g., "pediatric_cardiology").
+ * FIX #5: Normalizes a string into a Firebase-friendly document ID with improved type safety.
+ * @param name The input string.
+ * @returns A normalized string (lowercase, underscores for spaces, alphanumeric only).
  */
 export const normalizeId = (name: string): string => {
-  if (typeof name !== 'string') {
-    console.warn(`Attempted to normalize a non-string value: ${name}. Returning 'unknown_id'.`);
-    return 'unknown_id';
+  // Add a type check to prevent runtime errors if null or undefined is passed.
+  if (typeof name !== 'string' || !name) {
+    return '';
   }
-  return name
-    .trim()
-    .replace(/\s+/g, '_') // Replace spaces with underscores
-    .toLowerCase()         // Convert to lowercase
-    .replace(/[^a-z0-9_]/g, ''); // Remove any characters not alphanumeric or underscore
+  return name.trim().replace(/\s+/g, '_').toLowerCase().replace(/[^a-z0-9_]/g, '');
 };
 
 /**
- * Shuffles an array in place.
+ * Shuffles an array in place using the Fisher-Yates algorithm.
  * @param array The array to shuffle.
  * @returns The shuffled array.
  */
@@ -35,24 +23,3 @@ export function shuffleArray<T>(array: T[]): T[] {
   }
   return array;
 }
-
-/**
- * Formats milliseconds into a mm:ss string.
- * @param milliseconds Time in milliseconds.
- * @returns Formatted time string (mm:ss).
- */
-export const formatTime = (milliseconds: number): string => {
-  const totalSeconds = Math.floor(milliseconds / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-};
-
-/**
- * Formats a score number with locale-specific thousands separators.
- * @param score The score number.
- * @returns Formatted score string.
- */
-export const formatScore = (score: number): string => {
-  return score.toLocaleString();
-};

@@ -1,42 +1,35 @@
-// frontend/src/components/SearchResultItem.tsx
-// frontend/src/components/SearchResultItem.tsx
 import React from 'react';
-// Direct type imports
-import { MCQ, Flashcard } from '@pediaquiz/types';
 
-// SearchResult type should encompass common fields needed for display
-// and a 'type' discriminator for conditional rendering/navigation.
-interface SearchResult {
+// This is a generic interface used for displaying search results from different content types.
+export interface SearchResult {
   id: string;
-  title: string; // This will map to MCQ.question or Flashcard.front
-  snippet: string; // This will map to MCQ.explanation or Flashcard.back (or a portion)
-  type?: 'mcq' | 'flashcard' | 'chapter'; // Optional: for conditional rendering or navigation
-  topicId?: string; // Add topicId for navigation
-  chapterId?: string; // Add chapterId for navigation
+  title: string;
+  snippet: string;
+  type: 'mcq' | 'flashcard' | 'chapter';
+  topicId?: string;
+  chapterId?: string;
 }
 
 interface SearchResultItemProps {
-  result: SearchResult; // Changed prop name from 'item' to 'result' for consistency with internal use
-  onSelect: (item: SearchResult) => void; // Pass the full item for specific navigation logic
-  children?: React.ReactNode; // For optional custom content (like bookmark button)
+  result: SearchResult;
+  onSelect: (item: SearchResult) => void;
+  children?: React.ReactNode;
 }
 
 const SearchResultItem: React.FC<SearchResultItemProps> = ({ result, onSelect, children }) => {
   return (
     <div
-      className="p-4 bg-white dark:bg-slate-800 rounded-lg shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition-colors duration-150 flex justify-between items-center" // Added flex for children alignment
-      onClick={() => onSelect(result)} // Pass the full result object
+      className="card-base p-4 flex justify-between items-center cursor-pointer hover:shadow-md hover:border-sky-300 dark:hover:border-sky-600 transition-all duration-150"
+      onClick={() => onSelect(result)}
     >
-      <div>
-        <h3 className="text-md font-medium text-slate-900 dark:text-slate-100">{result.title}</h3>
-        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">{result.snippet}</p>
-        {result.type && (
-          <span className="inline-block mt-2 px-2 py-1 text-xs font-semibold text-sky-700 bg-sky-100 rounded-full dark:bg-sky-900/30 dark:text-sky-300">
+      <div className="flex-1 min-w-0">
+        <h3 className="font-medium text-slate-900 dark:text-slate-100 truncate">{result.title}</h3>
+        <p className="text-sm text-slate-600 dark:text-slate-400 mt-1 truncate">{result.snippet}</p>
+        <span className="inline-block mt-2 px-2 py-1 text-xs font-semibold text-sky-700 bg-sky-100 rounded-full dark:bg-sky-900/30 dark:text-sky-300">
             {result.type.toUpperCase()}
-          </span>
-        )}
+        </span>
       </div>
-      {children} {/* Render any children passed to this component (e.g., bookmark button) */}
+      {children && <div className="ml-4 flex-shrink-0">{children}</div>}
     </div>
   );
 };

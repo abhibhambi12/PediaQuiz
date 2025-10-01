@@ -1,107 +1,25 @@
 {
   "indexes": [
     {
-      "collectionGroup": "attemptedMCQs",
+      "collectionGroup": "contentGenerationJobs",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "latestAttempt.nextReviewDate",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "latestAttempt.userId",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "attemptedFlashcards",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "nextReviewDate",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "userId",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "MasterMCQ",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "tags",
-          "arrayConfig": "CONTAINS"
-        },
-        {
-          "fieldPath": "__name__",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "MarrowMCQ",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "tags",
-          "arrayConfig": "CONTAINS"
-        },
-        {
-          "fieldPath": "__name__",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "Flashcards",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "tags",
-          "arrayConfig": "CONTAINS"
-        },
-        {
-          "fieldPath": "__name__",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "userUploads",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
         {
           "fieldPath": "pipeline",
           "order": "ASCENDING"
         },
         {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
           "fieldPath": "createdAt",
           "order": "DESCENDING"
         }
       ]
     },
     {
-      "collectionGroup": "userUploads",
+      "collectionGroup": "contentGenerationJobs",
       "queryScope": "COLLECTION",
       "fields": [
         {
@@ -115,7 +33,7 @@
       ]
     },
     {
-      "collectionGroup": "userUploads",
+      "collectionGroup": "contentGenerationJobs",
       "queryScope": "COLLECTION",
       "fields": [
         {
@@ -138,48 +56,6 @@
         },
         {
           "fieldPath": "quizDate",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "customTests",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "userId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "goals",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "userId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "createdAt",
-          "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "collectionGroup": "logs",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "userId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "timestamp",
           "order": "DESCENDING"
         }
       ]

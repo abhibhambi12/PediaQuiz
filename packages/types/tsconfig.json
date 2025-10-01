@@ -1,18 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "composite": true,
-    "declaration": true,
-    "outDir": "lib",
-    "rootDir": "src",
-    "module": "CommonJS", // Should compile to CommonJS for broad compatibility
-    "moduleResolution": "node"
+    "module": "CommonJS", // Must match the backend consumer
+    "moduleResolution": "node", // Must match the backend consumer
+    "outDir": "./lib",
+    "rootDir": "./src"
   },
-  "include": [
-    "src"
-  ],
-  "exclude": [
-    "node_modules",
-    "lib"
-  ]
+  "include": ["src/**/*"]
 }

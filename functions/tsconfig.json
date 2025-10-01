@@ -1,19 +1,17 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
+    "module": "CommonJS", // Firebase Functions use CommonJS
+    "moduleResolution": "node", // Correct resolution for CommonJS
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
     "outDir": "lib",
-    "sourceMap": true,
+    "rootDir": "src",
     "strict": true,
-    "target": "es2021",
-    "esModuleInterop": true,
-    "resolveJsonModule": true,
-    "module": "CommonJS", // Node requires CommonJS or ESNext for imports
-    "moduleResolution": "node", // Node resolution strategy
-    "composite": true // Needed for project references
+    "target": "es2021"
   },
-  "include": [
-    "src"
-  ],
+  "compileOnSave": true,
+  "include": ["src/**/*"],
   "references": [
     {
       "path": "../packages/types"

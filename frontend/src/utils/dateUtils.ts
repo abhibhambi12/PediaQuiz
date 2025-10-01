@@ -1,19 +1,29 @@
-// frontend/src/utils/dateUtils.ts
-// FILE: frontend/src/utils/dateUtils.ts
-// This file can contain reusable date utility functions.
-// For now, it remains empty as specific utilities have not been defined or requested.
+import { Timestamp } from "firebase/firestore";
 
-// Example of a utility function if needed in the future:
-/*
-import { format, isToday, isYesterday } from 'date-fns';
-
-export const formatDateForDisplay = (date: Date): string => {
-  if (isToday(date)) {
-    return `Today at ${format(date, 'p')}`;
-  }
-  if (isYesterday(date)) {
-    return `Yesterday at ${format(date, 'p')}`;
-  }
-  return format(date, 'PPpp'); // e.g., Oct 25, 2023, 10:30 AM
+/**
+ * Safely converts various date-like values (ISO string, number, Date)
+ * into a JavaScript Date object. This is crucial for handling data from the backend and
+ * prevents runtime crashes from invalid date formats passed to date-fns or new Date().
+ * @param value The value to convert.
+ * @returns A valid Date object, or a fallback date (Jan 1, 1970) for invalid or null inputs.
+ */
+export const safeToDate = (value: any): Date => {
+    if (!value) {
+        return new Date('1970-01-01T00:00:00Z');
+    }
+    // This check is for client-side Timestamp objects, which should not exist with the new architecture,
+    // but is kept for robustness during transitions.
+    if (value instanceof Timestamp) {
+        return value.toDate();
+    }
+    if (value instanceof Date) {
+        return value;
+    }
+    if (typeof value === 'string' || typeof value === 'number') {
+        const d = new Date(value);
+        if (!isNaN(d.getTime())) {
+            return d;
+        }
+    }
+    return new Date('1970-01-01T00:00:00Z'); 
 };
-*/

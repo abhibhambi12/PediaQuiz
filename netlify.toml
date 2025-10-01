@@ -3,9 +3,9 @@
   base = "/"
   # The publish directory for the final build artifacts.
   publish = "frontend/dist"
-  # This simplified command leverages npm workspaces for dependency installation
-  # and then runs the top-level build script.
-  command = "npm install && npm run build"
+  # FIX #20: This command now correctly builds only the frontend for Netlify,
+  # saving build time by not compiling the backend functions.
+  command = "npm run build:frontend"
 
 [build.environment]
   # Specify the Node.js version to match your local and Firebase environments.

@@ -1,104 +1,85 @@
+// firestore.rules
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Default: Deny all access
-    match /{document=**} {
-      allow read, write: if false;
-    }
-    
     // --- Helper Functions ---
-    // Function to check if user is authenticated
     function isAuthenticated() {
       return request.auth != null;
     }
-    // Function to check if user is an administrator
+
+    function isUser(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Role-based access checks from custom claims
+    function getRole() {
+      return request.auth.token.role;
+    }
+
     function isAdmin() {
-      return isAuthenticated() && request.auth.token.isAdmin == true;
+      return getRole() == 'admin';
     }
 
-    // --- User Data Collection ---
-    // Users can read and write to their own profile document and its subcollections (e.g., attemptedMCQs, attemptedFlashcards, goals).
-    match /users/{userId} {
-      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+    function isFaculty() {
+        return getRole() == 'faculty' || isAdmin();
     }
-    // Explicitly allow subcollection access
-    match /users/{userId}/{collectionId}/{document=**} {
-      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+
+    // --- Content Collections: Read-only for authenticated users, full access for admins/faculty ---
+    match /{collection}/{docId} 
+    where collection in ['Topics', 'MarrowTopics', 'MasterMCQ', 'MarrowMCQ', 'Flashcards', 'KeyClinicalTopics'] {
+      allow read: if isAuthenticated() && resource.data.status == 'approved';
+      allow write: if isFaculty();
     }
     
-    // --- Content Collections (Public Read, Admin Write) ---
-    // All authenticated users can read main content collections.
-    // Only administrators can create, update, or delete content.
-    match /Topics/{topicId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
-    }
-    // Chapter notes are stored in a subcollection for General topics
     match /Topics/{topicId}/ChapterNotes/{chapterId} {
-      allow read: if isAuthenticated(); // All authenticated can read notes
-      allow write: if isAdmin();        // Only admins can write/update notes
+       allow read: if isAuthenticated();
+       allow write: if isFaculty();
+    }
+
+    // --- User-Specific Data Collections ---
+    match /users/{userId} {
+      allow read: if isUser(userId) || isAdmin();
+      // Users can only update specific, non-critical fields.
+      // Roles, admin status, XP, etc., can only be changed by secure backend functions.
+      allow update: if isUser(userId)
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                       .hasOnly(['displayName', 'theme', 'updatedAt', 'notificationSettings']);
+      allow create, delete: if false; 
     }
     
-    match /MarrowTopics/{topicId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
+    match /users/{userId}/{collectionId}/{document=**} {
+      allow read, write: if isUser(userId);
     }
     
-    match /MasterMCQ/{mcqId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
-    }
-    
-    match /MarrowMCQ/{mcqId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
-    }
-    
-    match /Flashcards/{flashcardId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
-    }
-    
-    match /KeyClinicalTopics/{topicId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
-    }
-    
-    // --- Application Data Collections ---
-    // Quiz results: A user can create their own result, and only read their own results.
-    // Ensure that `userId` in the new document matches the authenticated user's UID.
+    // --- Application Data Collections (Managed by Backend) ---
     match /quizResults/{resultId} {
-      allow read: if isAuthenticated() && request.auth.uid == resource.data.userId;
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      // No updates or deletes allowed from client for quiz results (immutable once created)
+      allow read: if isUser(resource.data.userId) || isAdmin();
+      allow create, update, delete: if false; 
     }
     
-    // Temporary quiz sessions: Can only be accessed by the user who created them.
-    // They are primarily managed by backend functions.
     match /quizSessions/{sessionId} {
-      allow read, write: if isAuthenticated() && request.auth.uid == resource.data.userId;
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      // Delete is also managed by backend (e.g., on session expiry or finish)
+      // Sessions are exclusively managed by backend functions to prevent cheating.
+      allow read, write: if false;
     }
 
-    // Custom tests: Can only be read/written by the user who created them.
-    match /customTests/{testId} {
-      allow read: if isAuthenticated() && request.auth.uid == resource.data.userId;
-      allow write: if isAuthenticated() && request.auth.uid == request.resource.data.userId;
+    match /cramSheets/{sheetId} {
+      // Users have full control over their own cram sheets.
+      allow read, create, update, delete: if isUser(resource.data.userId);
     }
     
-    // Admin-only userUploads collection: For content generation jobs.
-    // Only administrators can read or write to this collection.
-    match /userUploads/{uploadId} {
-      allow read, write: if isAdmin();
+    match /contentGenerationJobs/{jobId} {
+      allow read, write: if isFaculty();
     }
 
-    // Logs: This collection is written to by functions, and read by the owning user.
     match /logs/{logId} {
-      allow read: if isAuthenticated() && request.auth.uid == resource.data.userId;
-      allow write: if false; // Only functions should write to logs
+      allow read: if isAdmin();
+      allow write: if false; // Only backend can write
+    }
+    
+    match /adminConfig/{document} {
+      allow read, write: if isAdmin();
     }
   }
 }

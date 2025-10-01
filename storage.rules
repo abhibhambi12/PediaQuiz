@@ -1,15 +1,17 @@
+// storage.rules
 rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
     match /uploads/{userId}/{fileName} {
-      allow read: if request.auth != null;
+      // Allow only the owner to read their own files
+      allow read: if request.auth != null && request.auth.uid == userId;
       // Allow authenticated users to write to their own folder
       // Restrict file types and size to prevent abuse
       allow write: if request.auth != null &&
                    request.auth.uid == userId &&
-                   request.resource.contentType.matches('image/.*|application/pdf|text/plain|application/vnd.openxmlformats-officedocument.wordprocessingml.document') && // Added .docx content type
-                   request.resource.size < 10 * 1024 * 1024; // 10MB limit
+                   request.resource.contentType.matches('image/.*|application/pdf|text/plain|application/vnd.openxmlformats-officedocument.wordprocessingml.document') &&
+                   request.resource.size < 40 * 1024 * 1024; // 40MB limit
     }
   }
 }
