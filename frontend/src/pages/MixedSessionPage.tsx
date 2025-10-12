@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
-import { useData } from '@/contexts/DataContext';
 import { addAttempt, addFlashcardAttempt, addQuizResult } from '@/services/apiService';
 import { getMCQsByIds, getFlashcardsByIds } from '@/services/contentService';
 import { SessionManager } from '@/services/sessionService';
@@ -19,7 +18,6 @@ const MixedSessionPage: React.FC = () => {
     const { mode = 'daily_grind', sessionId } = useParams<{ mode?: QuizSession['mode']; sessionId?: string; }>();
     const navigate = useNavigate();
     const { user } = useAuth();
-    const { appData } = useData();
     const queryClient = useQueryClient();
     const { addToast } = useToast();
 
@@ -39,18 +37,25 @@ const MixedSessionPage: React.FC = () => {
     const addFlashcardAttemptMutation = useMutation({ mutationFn: addFlashcardAttempt });
     
     useEffect(() => {
-        if (session && appData) {
-            const mcqs = getMCQsByIds(appData, session.mcqIds);
-            const flashcards = getFlashcardsByIds(appData, session.flashcardIds || []);
-            const itemsMap = new Map<string, SessionItem>();
-            mcqs.forEach(m => itemsMap.set(m.id, { ...m, sessionType: 'mcq' }));
-            flashcards.forEach(f => itemsMap.set(f.id, { ...f, sessionType: 'flashcard' }));
-            const orderedItems = (session.itemOrder || [...session.mcqIds, ...session.flashcardIds || []]).map(id => itemsMap.get(id)).filter((item): item is SessionItem => !!item);
-            setSessionItems(orderedItems);
-            setCurrentIndex(session.currentIndex || 0);
-            setAnswers(session.answers || {});
-        }
-    }, [session, appData]);
+        const fetchSessionItems = async () => {
+            if (session) {
+                const [mcqs, flashcards] = await Promise.all([
+                    getMCQsByIds(session.mcqIds),
+                    getFlashcardsByIds(session.flashcardIds || [])
+                ]);
+
+                const itemsMap = new Map<string, SessionItem>();
+                mcqs.forEach((m: MCQ) => itemsMap.set(m.id, { ...m, sessionType: 'mcq' }));
+                flashcards.forEach((f: Flashcard) => itemsMap.set(f.id, { ...f, sessionType: 'flashcard' }));
+                
+                const orderedItems = (session.itemOrder || [...session.mcqIds, ...session.flashcardIds || []]).map(id => itemsMap.get(id)).filter((item): item is SessionItem => !!item);
+                setSessionItems(orderedItems);
+                setCurrentIndex(session.currentIndex || 0);
+                setAnswers(session.answers || {});
+            }
+        };
+        fetchSessionItems();
+    }, [session]);
 
     const currentItem = useMemo(() => sessionItems[currentIndex], [sessionItems, currentIndex]);
     

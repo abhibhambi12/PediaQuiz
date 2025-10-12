@@ -1,13 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, Fragment } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { BellIcon, Bars3Icon, XMarkIcon, WifiIcon } from '@heroicons/react/24/outline';
+import { BellIcon, Bars3Icon, XMarkIcon, WifiIcon, ChevronDownIcon } from '@heroicons/react/24/outline';
 import { calculateLevelProgress } from '@/utils/gamification';
 import { useQuery } from '@tanstack/react-query';
 import { getNotifications } from '@/services/apiService';
-import NotificationsPanel from './NotificationsPanel';
+import NotificationsPanel from '@/components/NotificationsPanel';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { Notification } from '@pediaquiz/types';
+import { Menu, Transition } from '@headlessui/react';
+import clsx from 'clsx';
 
 const Header: React.FC = () => {
   const { user } = useAuth();
@@ -30,9 +32,15 @@ const Header: React.FC = () => {
   const { currentLevel, progressToNextLevel } = calculateLevelProgress(user?.xp || 0);
 
   const adminNavItems = [
-    { name: 'Review', path: '/admin/review', roles: ['admin', 'faculty'] },
-    { name: 'User Mgmt', path: '/admin/users', roles: ['admin'] },
+    { name: 'Review Queue', path: '/admin/review', roles: ['admin', 'faculty'] },
+    { name: 'Content Uploader', path: '/generator', roles: ['admin', 'faculty'] },
+    { name: 'Content Management', path: '/admin/content-management', roles: ['admin'] },
+    { name: 'Tag Management', path: '/admin/tag-management', roles: ['admin'] },
+    { name: 'User Management', path: '/admin/users', roles: ['admin'] },
+    { name: 'Analytics', path: '/admin/analytics', roles: ['admin'] },
+    { name: 'AI Config', path: '/admin/ai-config', roles: ['admin'] },
     { name: 'Audit Logs', path: '/admin/logs', roles: ['admin'] },
+    { name: 'Admin Tools', path: '/admin/tools', roles: ['admin'] },
   ];
   
   const userAdminNavs = adminNavItems.filter(item => user?.role && item.roles.includes(user.role));
@@ -64,12 +72,34 @@ const Header: React.FC = () => {
             )}
             <div className="hidden sm:flex items-center space-x-2">
               {user && (
-                <button onClick={() => setIsNotificationsOpen(true)} className="relative p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700">
+                <button onClick={() => setIsNotificationsOpen(true)} className="relative p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700" aria-label="Open notifications">
                   <BellIcon className="h-6 w-6" />
                   {unreadCount > 0 && <span className="absolute top-1 right-1 h-4 w-4 text-xs flex items-center justify-center font-bold text-white bg-red-600 rounded-full">{unreadCount}</span>}
                 </button>
               )}
-              {userAdminNavs.length > 0 && <Link to={userAdminNavs[0].path} className="text-sm font-medium hover:text-sky-500 px-3 py-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700">Admin</Link>}
+              {userAdminNavs.length > 0 && (
+                <Menu as="div" className="relative">
+                  <Menu.Button className="flex items-center text-sm font-medium hover:text-sky-500 px-3 py-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700">
+                    Admin
+                    <ChevronDownIcon className="h-4 w-4 ml-1" />
+                  </Menu.Button>
+                  <Transition as={Fragment} enter="transition ease-out duration-100" enterFrom="transform opacity-0 scale-95" enterTo="transform opacity-100 scale-100" leave="transition ease-in duration-75" leaveFrom="transform opacity-100 scale-100" leaveTo="transform opacity-0 scale-95">
+                    <Menu.Items className="absolute right-0 mt-2 w-48 origin-top-right bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+                      <div className="px-1 py-1">
+                        {userAdminNavs.map(item => (
+                          <Menu.Item key={item.path}>
+                            {({ active }) => (
+                              <Link to={item.path} className={clsx('group flex w-full items-center rounded-md px-2 py-2 text-sm', active ? 'bg-sky-500 text-white' : 'text-slate-900 dark:text-slate-100')}>
+                                {item.name}
+                              </Link>
+                            )}
+                          </Menu.Item>
+                        ))}
+                      </div>
+                    </Menu.Items>
+                  </Transition>
+                </Menu>
+              )}
             </div>
             <button onClick={() => setIsMobileMenuOpen(o => !o)} className="p-2 ml-2 sm:hidden" aria-label="Open mobile menu">
               {isMobileMenuOpen ? <XMarkIcon className="h-6 w-6" /> : <Bars3Icon className="h-6 w-6" />}

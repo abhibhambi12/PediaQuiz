@@ -1,4 +1,3 @@
-// frontend/src/pages/BookmarksPage.tsx
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
@@ -25,21 +24,21 @@ const BookmarksPage: React.FC = () => {
     const bookmarkedFlashcardIds = user?.bookmarkedFlashcards || [];
 
     const { data: bookmarkedContent, isLoading: isContentLoading } = useQuery({
-        queryKey: ['bookmarkedContent', bookmarkedMcqIds, bookmarkedFlashcardIds, appData],
+        queryKey: ['bookmarkedContent', bookmarkedMcqIds, bookmarkedFlashcardIds],
         queryFn: async () => {
             const [mcqs, flashcards] = await Promise.all([
-                getMCQsByIds(appData ?? undefined, bookmarkedMcqIds),
-                getFlashcardsByIds(appData ?? undefined, bookmarkedFlashcardIds)
+                getMCQsByIds(bookmarkedMcqIds),
+                getFlashcardsByIds(bookmarkedFlashcardIds)
             ]);
             return [...mcqs, ...flashcards];
         },
-        enabled: !!user && !!appData,
+        enabled: !!user && (bookmarkedMcqIds.length > 0 || bookmarkedFlashcardIds.length > 0),
     });
 
     const toggleBookmarkMutation = useMutation({
         mutationFn: toggleBookmark,
         onSuccess: async () => {
-            await refreshUser(); // Refresh user doc to get latest bookmarks
+            await refreshUser();
             queryClient.invalidateQueries({ queryKey: ['bookmarkedContent'] });
             addToast("Bookmark removed!", "success");
         },
@@ -85,7 +84,9 @@ const BookmarksPage: React.FC = () => {
                                         {items.map(item => (
                                             <div key={item.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-50 dark:bg-slate-700/50 mb-2">
                                                 <p className="flex-1 cursor-pointer pr-2" onClick={() => navigate(item.type === 'mcq' ? `/chapters/${item.topicId}/${item.chapterId}` : `/flashcards/${item.topicId}/${item.chapterId}`)}>{item.type === 'mcq' ? item.question : item.front}</p>
-                                                <button onClick={() => toggleBookmarkMutation.mutate({ contentId: item.id, contentType: item.type })} className="p-2 text-amber-500 hover:text-amber-400"><BookmarkSolidIcon className="h-5 w-5" /></button>
+                                                <button onClick={() => toggleBookmarkMutation.mutate({ contentId: item.id, contentType: item.type })} className="p-2 text-amber-500 hover:text-amber-400" aria-label="Remove bookmark">
+                                                    <BookmarkSolidIcon className="h-5 w-5" />
+                                                </button>
                                             </div>
                                         ))}
                                     </div>

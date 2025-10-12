@@ -1,4 +1,11 @@
-import React, { createContext, useContext, useReducer, useEffect, ReactNode, Dispatch } from 'react';
+import {
+  createContext,
+  useContext,
+  useReducer,
+  useEffect,
+  ReactNode,
+  Dispatch,
+} from 'react';
 import { usePersistentState } from '@/hooks/usePersistentState';
 
 type Theme = 'light' | 'dark' | 'system';
@@ -14,9 +21,14 @@ interface SettingsContextProps {
   dispatch: Dispatch<SettingsAction>;
 }
 
-const SettingsContext = createContext<SettingsContextProps | undefined>(undefined);
+const SettingsContext = createContext<SettingsContextProps | undefined>(
+  undefined
+);
 
-const settingsReducer = (state: SettingsState, action: SettingsAction): SettingsState => {
+const settingsReducer = (
+  state: SettingsState,
+  action: SettingsAction
+): SettingsState => {
   switch (action.type) {
     case 'SET_THEME':
       return { ...state, theme: action.payload };
@@ -26,7 +38,10 @@ const settingsReducer = (state: SettingsState, action: SettingsAction): Settings
 };
 
 export const SettingsProvider = ({ children }: { children: ReactNode }) => {
-  const [persistedTheme, setPersistedTheme] = usePersistentState<Theme>('pediaquiz-theme', 'system');
+  const [persistedTheme, setPersistedTheme] = usePersistentState<Theme>(
+    'pediaquiz-theme',
+    'system'
+  );
 
   const [state, dispatch] = useReducer(settingsReducer, {
     theme: persistedTheme,
@@ -35,7 +50,11 @@ export const SettingsProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     setPersistedTheme(state.theme);
     const root = window.document.documentElement;
-    if (state.theme === 'dark' || (state.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    if (
+      state.theme === 'dark' ||
+      (state.theme === 'system' &&
+        window.matchMedia('(prefers-color-scheme: dark)').matches)
+    ) {
       root.classList.add('dark');
     } else {
       root.classList.remove('dark');

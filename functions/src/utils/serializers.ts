@@ -1,4 +1,3 @@
-// FIX: Restored the Timestamp serialization helper.
 import { Timestamp } from "firebase-admin/firestore";
 
 export const convertDocTimestamps = (data: any): any => {

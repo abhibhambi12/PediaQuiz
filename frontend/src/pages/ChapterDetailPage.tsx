@@ -4,7 +4,7 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { useData } from '@/contexts/DataContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/Toast';
-import { getChapterContent } from '@/services/contentService';
+import { useChapterContent } from '@/hooks/useChapterContent';
 import { generateChapterSummary } from '@/services/aiService';
 import { getAttemptedMCQs } from '@/services/apiService';
 import { SessionManager } from '@/services/sessionService';
@@ -33,11 +33,7 @@ const ChapterDetailPage: React.FC = () => {
         return { chapter: foundChapter, topic: foundTopic || null };
     }, [appData, topicId, chapterId]);
     
-    const { data: chapterContent, isLoading: isContentLoading } = useQuery({
-        queryKey: ['chapterContent', chapterId, appData],
-        queryFn: () => getChapterContent(appData, chapterId!),
-        enabled: !!chapterId && !!appData,
-    });
+    const { data: chapterContent, isLoading: isContentLoading } = useChapterContent(chapterId);
 
     const { data: attemptedMCQDocs, isLoading: areAttemptsLoading } = useQuery({
         queryKey: ['attemptedMCQDocs', user?.uid],
@@ -96,7 +92,8 @@ const ChapterDetailPage: React.FC = () => {
                 
                 <div className="grid grid-cols-2 gap-4 mt-6">
                     <button onClick={() => startSessionMutation.mutate({ mode: 'quiz', mcqIds: chapterContent?.mcqs.map(m => m.id) || [] })} disabled={!chapterContent?.mcqs.length || startSessionMutation.isPending} className="btn-primary py-3">Start Quiz</button>
-                    <button onClick={() => navigate(`/flashcards/${topic.id}/${chapter.id}`)} disabled={!chapter.flashcardCount} className="btn-secondary py-3">Flashcards</button>
+                    <button onClick={() => startSessionMutation.mutate({ mode: 'practice', mcqIds: chapterContent?.mcqs.map(m => m.id) || [] })} disabled={!chapterContent?.mcqs.length || startSessionMutation.isPending} className="btn-secondary py-3">Practice MCQs</button>
+                    <button onClick={() => navigate(`/flashcards/${topic.id}/${chapter.id}`)} disabled={!chapter.flashcardCount} className="btn-secondary py-3 col-span-2">Practice Flashcards</button>
                     <button onClick={() => startSessionMutation.mutate({ mode: 'incorrect', mcqIds: incorrectMcqIds })} disabled={!incorrectMcqIds.length || startSessionMutation.isPending} className="btn-danger py-3 col-span-2">Review Mistakes ({incorrectMcqIds.length})</button>
                 </div>
             </div>
@@ -105,11 +102,11 @@ const ChapterDetailPage: React.FC = () => {
                 <h2 className="text-2xl font-bold mb-4">Study Notes</h2>
                 {user?.isAdmin && <Link to={`/admin/notes/edit/${topicId}/${chapterId}`} state={{ source: topic.source }} className="btn-neutral text-sm mb-4 inline-block">Edit Notes</Link>}
                 <div className="prose dark:prose-invert max-w-none">
-                    {chapter.summaryNotes ? <ReactMarkdown children={chapter.summaryNotes} /> : <p>No notes available for this chapter yet.</p>}
+                    {chapter.summaryNotes ? <ReactMarkdown>{chapter.summaryNotes}</ReactMarkdown> : <p>No notes available for this chapter yet.</p>}
                 </div>
                 <div className="mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
                     <h3 className="text-xl font-bold mb-2">AI Summary</h3>
-                    {generateSummaryMutation.isPending ? <Loader message="Generating..." /> : aiSummary ? <ReactMarkdown className="prose dark:prose-invert max-w-none" children={aiSummary} /> : 
+                    {generateSummaryMutation.isPending ? <Loader message="Generating..." /> : aiSummary ? <ReactMarkdown className="prose dark:prose-invert max-w-none">{aiSummary}</ReactMarkdown> : 
                         <button onClick={() => chapter.originalTextRefIds && generateSummaryMutation.mutate({ uploadIds: chapter.originalTextRefIds })} className="btn-primary" disabled={!chapter.originalTextRefIds?.length}>Generate with AI</button>
                     }
                 </div>

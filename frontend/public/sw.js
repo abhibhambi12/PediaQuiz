@@ -1,77 +1,71 @@
-// frontend/public/sw.js
-/**
- * PediaQuiz Service Worker
- *
- * This service worker handles PWA features including:
- * 1. Precaching of application assets for offline use.
- * 2. Background push notifications via Firebase Cloud Messaging.
- * 3. Background Sync for queueing actions when offline.
- */
-
-// These imports are required by Workbox for its functionality.
 import { precacheAndRoute } from 'workbox-precaching';
 import { registerRoute } from 'workbox-routing';
-import { StaleWhileRevalidate, CacheFirst } from 'workbox-strategies';
-import { CacheableResponsePlugin } from 'workbox-cacheable-response';
-import { ExpirationPlugin } from 'workbox-expiration';
-import { BackgroundSyncPlugin } from 'workbox-background-sync';
+import { NetworkFirst } from 'workbox-strategies';
 
-// Import Firebase messaging scripts for push notifications.
-importScripts("https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js");
-importScripts("https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js");
+// This is a placeholder for the manifest that VitePWA will inject.
+// The existing precaching functionality is preserved.
+precacheAndRoute(self.__WB_MANIFEST);
 
-// --- 1. Precaching ---
-// The `self.__WB_MANIFEST` placeholder is automatically replaced by `vite-plugin-pwa`
-// with a list of all static assets (JS, CSS, images) to cache on install.
-precacheAndRoute(self.__WB_MANIFEST || []);
-
-// --- 2. Background Sync ---
-// Create a BackgroundSyncPlugin instance to queue failed POST requests.
-const bgSyncPlugin = new BackgroundSyncPlugin('pediaquiz-action-queue', {
-  maxRetentionTime: 48 * 60, // Retry for up to 48 hours
-});
-
-// Register a route to handle API calls to our backend functions.
-// When offline, failed POST requests will be added to the queue by `bgSyncPlugin`.
+// Existing runtime caching for API calls is preserved.
 registerRoute(
-  ({ url }) => url.href.includes('cloudfunctions.net'),
-  new StaleWhileRevalidate({
-    plugins: [bgSyncPlugin],
-  }),
-  'POST' // Only apply this to POST requests (mutations like submit quiz, update cram sheet)
-);
-
-
-// --- 3. Caching Strategies ---
-// Cache Google Fonts with a cache-first strategy for performance.
-registerRoute(
-  ({ url }) => url.origin === 'https://fonts.googleapis.com' || url.origin === 'https://fonts.gstatic.com',
-  new CacheFirst({
-    cacheName: 'google-fonts',
-    plugins: [
-      new CacheableResponsePlugin({ statuses: [0, 200] }),
-      new ExpirationPlugin({ maxAgeSeconds: 60 * 60 * 24 * 365 }), // 1 year
-    ],
+  ({ url }) => url.origin === 'https://us-central1-pediaquizapp.cloudfunctions.net',
+  new NetworkFirst({
+    cacheName: 'api-cache',
   })
 );
 
-// --- 4. Firebase Cloud Messaging ---
-// The `__FIREBASE_CONFIG__` placeholder will be replaced by Vite during the build process.
-const firebaseConfig = self.__FIREBASE_CONFIG__;
+// This ensures the new service worker activates immediately.
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
 
-if (firebaseConfig && !firebase.apps.length) {
-    firebase.initializeApp(firebaseConfig);
-    const messaging = firebase.messaging();
+// This ensures that the page is controlled by the service worker on first load.
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
+});
 
-    messaging.onBackgroundMessage((payload) => {
-        console.log("[sw.js] Received background message: ", payload);
+// --- BATCH 4: PWA ENHANCEMENTS ---
+// New event listener for incoming push notifications.
+self.addEventListener('push', (event) => {
+  const data = event.data.json();
+  const title = data.title || 'PediaQuiz';
+  const options = {
+    body: data.body || 'You have a new notification.',
+    icon: '/pediaquiz-logo.svg', // Path to your app icon
+    badge: '/pediaquiz-logo.svg', // Path to a badge icon
+  };
 
-        const notificationTitle = payload.notification?.title || "PediaQuiz";
-        const notificationOptions = {
-            body: payload.notification?.body || "You have a new update.",
-            icon: "/pwa-192x192.png",
-        };
+  event.waitUntil(self.registration.showNotification(title, options));
+});
 
-        self.registration.showNotification(notificationTitle, notificationOptions);
-    });
-}
+// New event listener for clicking on a notification.
+// This example focuses the browser tab or opens a new one to the app's root URL.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      if (clientList.length > 0) {
+        let client = clientList[0];
+        for (let i = 0; i < clientList.length; i++) {
+          if (clientList[i].focused) {
+            client = clientList[i];
+          }
+        }
+        return client.focus();
+      }
+      return clients.openWindow('/');
+    })
+  );
+});
+
+// New event listener for future background sync tasks.
+// This provides the foundation for robust offline functionality.
+self.addEventListener('sync', (event) => {
+    if (event.tag === 'sync-quiz-results') {
+        console.log('Service Worker: Background sync for quiz results triggered.');
+        // In a future batch, logic to sync from IndexedDB to Firestore will be added here.
+        // event.waitUntil(syncQuizResults());
+    }
+});

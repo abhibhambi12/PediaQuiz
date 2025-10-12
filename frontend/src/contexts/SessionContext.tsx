@@ -1,4 +1,4 @@
-import React, { createContext, useContext, ReactNode } from 'react';
+import { createContext, useContext, ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { SessionManager } from '@/services/sessionService';
@@ -13,7 +13,7 @@ const SessionContext = createContext<SessionContextProps | undefined>(undefined)
 
 export const SessionProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
-  
+
   const { data: activeSession, isLoading } = useQuery({
     queryKey: ['activeSession', user?.uid, user?.activeSessionId],
     queryFn: () => {
@@ -21,8 +21,8 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
       return SessionManager.getSession(user.activeSessionId);
     },
     enabled: !!user?.activeSessionId,
-    refetchOnWindowFocus: true, // Refetch to check session validity when user returns
-    staleTime: 1000 * 60, // 1 minute
+    refetchOnWindowFocus: true, 
+    staleTime: 1000 * 60, 
   });
 
   return (

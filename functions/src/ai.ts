@@ -1,3 +1,4 @@
+// functions/src/ai.ts
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import * as logger from "firebase-functions/logger";
 import { VertexAI, GenerativeModel, Content } from "@google-cloud/vertexai";
@@ -7,18 +8,17 @@ import { LOCATION, PROJECT_ID, DEFAULT_AI_CONFIG, LIGHT_FUNCTION_OPTIONS, HEAVY_
 import type { AIConfig, ChatMessage, GetDailyWarmupQuizCallableData, GetMockExamQuestionsCallableData, MCQ, ClientQuizResult, GenerateWeaknessBasedTestCallableData, GoalInput } from "@pediaquiz/types";
 import { FieldPath, Timestamp, FieldValue } from "firebase-admin/firestore";
 import { createAuditLog } from "./utils/audit";
-import { extractJson } from "./utils/stringHelpers";
+import { getSanitizedJsonFromAiResponse } from "./utils/ai-helpers";
 
-let vertexAI: VertexAI;
-let powerfulModel: GenerativeModel;
-let quickModel: GenerativeModel;
+let vertexAI: VertexAI | undefined;
+let powerfulModel: GenerativeModel | undefined;
+let quickModel: GenerativeModel | undefined;
 
 export async function getAIConfig(): Promise<AIConfig> {
     const configDoc = await db.collection('adminConfig').doc('ai').get();
     if (configDoc.exists) {
         return configDoc.data() as AIConfig;
     }
-    // Return default config with placeholder timestamps if not found
     return {
         ...DEFAULT_AI_CONFIG,
         createdAt: Timestamp.now(),
@@ -32,12 +32,10 @@ export async function ensureAiClientsInitialized() {
         vertexAI = new VertexAI({ project: PROJECT_ID, location: LOCATION });
         powerfulModel = vertexAI.getGenerativeModel({ model: aiConfig.powerfulModel });
         quickModel = vertexAI.getGenerativeModel({ model: aiConfig.quickModel });
-        logger.info("Vertex AI clients initialized with specified models.");
+        logger.info("Vertex AI clients initialized on-demand.");
     }
-    return { powerfulModel, quickModel };
+    return { powerfulModel: powerfulModel!, quickModel: quickModel! };
 }
-
-export { extractJson as extractJsonFromAiResponse } from "./utils/stringHelpers";
 
 export const chatWithAssistant = onCall(LIGHT_FUNCTION_OPTIONS, async (request) => {
     const userId = ensureAuthenticated(request);
@@ -56,14 +54,13 @@ export const chatWithAssistant = onCall(LIGHT_FUNCTION_OPTIONS, async (request) 
     let contextPrompt = '';
     if (context?.mcqId) {
         const mcqDoc = await db.collection('MasterMCQ').doc(context.mcqId).get();
-        const mcqData = mcqDoc.exists ? mcqDoc.data() : null;
-        if (mcqData) contextPrompt += `\n\nContext: This conversation is about the MCQ \"${mcqData.question}\". Explanation: \"${mcqData.explanation || ''}\".`;
+        if (mcqDoc.exists) contextPrompt += `\n\nContext: MCQ is \"${mcqDoc.data()?.question}\".`;
     }
 
     const chat = powerfulModel.startChat({ history: chatHistoryForAI });
     const result = await chat.sendMessage(prompt + contextPrompt);
     
-    await createAuditLog({ userId, message: `Used AI Assistant. Prompt: \"${prompt.substring(0, 100)}...\"`});
+    await createAuditLog({ userId, message: `Used AI Assistant.`});
     return { response: result.response.candidates?.[0]?.content.parts[0].text || "Sorry, I couldn't generate a response." };
 });
 
@@ -88,26 +85,20 @@ export const getDailyWarmupQuiz = onCall(LIGHT_FUNCTION_OPTIONS, async (request)
             .get();
         mcqIds = mcqIds.concat(remaining.docs.map(doc => doc.id));
     }
-    
     return { mcqIds };
 });
 
 export const generateWeaknessBasedTest = onCall(HEAVY_FUNCTION_OPTIONS, async (request) => {
     const userId = ensureAuthenticated(request);
     const { testSize } = request.data as GenerateWeaknessBasedTestCallableData;
-
     const attemptsSnapshot = await db.collection('users').doc(userId).collection('attemptedMCQs')
         .where('latestAttempt.isCorrect', '==', false)
         .limit(testSize * 5)
         .get();
-        
     const incorrectAttempts = attemptsSnapshot.docs.map(doc => doc.id);
-
     if (incorrectAttempts.length === 0) return { mcqIds: [] };
-
     const selectedIds = incorrectAttempts.sort(() => 0.5 - Math.random()).slice(0, testSize);
-    
-    await createAuditLog({ userId, message: `Generated a weakness-based test with ${selectedIds.length} questions.` });
+    await createAuditLog({ userId, message: `Generated a weakness-based test.` });
     return { mcqIds: selectedIds };
 });
 
@@ -142,12 +133,11 @@ export const generatePerformanceAdvice = onCall(LIGHT_FUNCTION_OPTIONS, async (r
     ensureAuthenticated(request);
     const { powerfulModel } = await ensureAiClientsInitialized();
     const { overallAccuracy, strongTopics, weakTopics } = request.data;
-    const prompt = `Generate personalized study advice and encouragement for a dedicated medical student based on their quiz performance. Frame it positively to motivate continued learning.
+    const prompt = `Generate personalized study advice for a medical student.
     Overall Accuracy: ${overallAccuracy.toFixed(1)}%
     Strong Topics: ${strongTopics.join(', ') || 'N/A'}
     Weak Topics: ${weakTopics.join(', ') || 'N/A'}
-
-    Provide actionable tips, effective study strategies, and strong encouragement to keep them engaged. Conclude with a strong call to action to continue studying. Suggest reviewing specific incorrect questions or starting a weakness test. Use emojis where appropriate to make it more engaging.`;
+    Provide actionable tips and encouragement.`;
     const result = await powerfulModel.generateContent(prompt);
     return { advice: result.response.candidates?.[0]?.content?.parts?.[0]?.text || "Could not generate advice." };
 });
@@ -158,15 +148,13 @@ export const getQuizSessionFeedback = onCall(HEAVY_FUNCTION_OPTIONS, async (requ
     const { quizResultId } = request.data;
     const resultDoc = await db.collection('quizResults').doc(quizResultId).get();
     if (!resultDoc.exists || resultDoc.data()?.userId !== userId) throw new HttpsError("not-found", "Quiz result not found.");
-    
     const resultData = resultDoc.data() as ClientQuizResult;
     const mcqIds = resultData.results.map(r => r.mcqId);
     if (mcqIds.length === 0) return { feedback: "No questions to analyze." };
-
     const mcqDocs = await db.collection('MasterMCQ').where(FieldPath.documentId(), 'in', mcqIds).get();
     const mcqsById = new Map(mcqDocs.docs.map(doc => [doc.id, doc.data() as MCQ]));
     const analysisData = resultData.results.map(r => ({ question: mcqsById.get(r.mcqId)?.question, topic: mcqsById.get(r.mcqId)?.topicName, isCorrect: r.isCorrect }));
-    const prompt = `Analyze this pediatric quiz performance. Provide concise, actionable feedback focusing on weak topics. Data: ${JSON.stringify(analysisData)}`;
+    const prompt = `Analyze this pediatric quiz performance. Provide concise, actionable feedback. Data: ${JSON.stringify(analysisData)}`;
     const result = await powerfulModel.generateContent(prompt);
     return { feedback: result.response.candidates?.[0]?.content?.parts?.[0]?.text || "Could not generate feedback." };
 });
@@ -175,9 +163,15 @@ export const getExpandedSearchTerms = onCall(LIGHT_FUNCTION_OPTIONS, async(reque
     ensureAuthenticated(request);
     const { quickModel } = await ensureAiClientsInitialized();
     const { query } = request.data;
-    const prompt = `Expand the medical search query \"${query}\" into up to 5 highly relevant and clinically related terms or synonyms. Respond with a JSON array of strings.`;
+    const prompt = `You are a helpful medical search assistant. Expand the pediatric medical search query "${query}" into a list of up to 5 highly relevant, related clinical terms or synonyms.
+    Your response MUST be ONLY a single, valid JSON array of strings.
+    Example: for "Kawasaki", you might return ["mucocutaneous lymph node syndrome", "coronary artery aneurysm", "IVIG", "aspirin therapy"].
+    
+    Query: "${query}"`;
     const result = await quickModel.generateContent(prompt);
-    return { terms: extractJson(result.response.candidates?.[0]?.content?.parts?.[0]?.text || '[]') };
+    const textResponse = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+    const terms = [query.toLowerCase(), ...(await getSanitizedJsonFromAiResponse(textResponse, [])).map((t: string) => t.toLowerCase())];
+    return { terms: Array.from(new Set(terms)) };
 });
 
 export const getHint = onCall(LIGHT_FUNCTION_OPTIONS, async(request) => {
@@ -186,7 +180,7 @@ export const getHint = onCall(LIGHT_FUNCTION_OPTIONS, async(request) => {
     const { mcqId } = request.data;
     const mcqDoc = await db.collection('MasterMCQ').doc(mcqId).get();
     if (!mcqDoc.exists) throw new HttpsError('not-found', 'MCQ not found');
-    const prompt = `Provide a short, one-sentence hint for the following MCQ without revealing the answer: ${mcqDoc.data()?.question}`;
+    const prompt = `Provide a short, one-sentence hint for the MCQ "${mcqDoc.data()?.question}" without revealing the answer.`;
     const result = await quickModel.generateContent(prompt);
     return { hint: result.response.candidates?.[0]?.content?.parts?.[0]?.text || 'No hint available.' };
 });
@@ -198,9 +192,14 @@ export const evaluateFreeTextAnswer = onCall(LIGHT_FUNCTION_OPTIONS, async(reque
     const mcqDoc = await db.collection('MasterMCQ').doc(mcqId).get();
     if (!mcqDoc.exists) throw new HttpsError('not-found', 'MCQ not found');
     const correctAnswer = mcqDoc.data()?.correctAnswer;
-    const prompt = `Is the user's answer \"${userAnswer}\" a correct or acceptable alternative for \"${correctAnswer}\"? Respond with a JSON object: {\"isCorrect\": boolean, \"feedback\": \"Brief explanation\"}.`;
+    const prompt = `Analyze if the user's answer is a clinically acceptable equivalent to the correct answer for a medical question.
+    Correct Answer: "${correctAnswer}"
+    User's Answer: "${userAnswer}"
+    
+    Respond ONLY with a single, valid JSON object with two keys: "isCorrect" (boolean) and "feedback" (a brief, one-sentence explanation for your decision).`;
     const result = await powerfulModel.generateContent(prompt);
-    return extractJson(result.response.candidates?.[0]?.content?.parts?.[0]?.text || '{}');
+    const textResponse = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    return await getSanitizedJsonFromAiResponse(textResponse, { isCorrect: false, feedback: "Could not evaluate answer." });
 });
 
 export const createFlashcardFromMcq = onCall(LIGHT_FUNCTION_OPTIONS, async(request) => {
@@ -210,23 +209,27 @@ export const createFlashcardFromMcq = onCall(LIGHT_FUNCTION_OPTIONS, async(reque
     const mcqDoc = await db.collection('MasterMCQ').doc(mcqId).get();
     if (!mcqDoc.exists) throw new HttpsError('not-found', 'MCQ not found');
     const mcq = mcqDoc.data() as MCQ;
-    const prompt = `Create a concise flashcard from this MCQ. The front should be a question, the back a direct answer. Front: \"${mcq.question}\", Back: \"${mcq.correctAnswer}\". Explanation: \"${mcq.explanation}\". Respond with a JSON object: {\"front\": \"...\", \"back\": \"...\"}.`;
+    const prompt = `Convert the following medical MCQ into a high-yield, concise flashcard. The 'front' should be a direct question, and the 'back' should be the direct answer.
+    MCQ Question: "${mcq.question}"
+    Correct Answer: "${mcq.correctAnswer}"
+    Explanation: "${mcq.explanation}"
+    
+    Respond ONLY with a single, valid JSON object with two keys: "front" and "back".`;
     const result = await powerfulModel.generateContent(prompt);
-    const flashcardData = extractJson(result.response.candidates?.[0]?.content?.parts?.[0]?.text || '{}');
+    const textResponse = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    const flashcardData = await getSanitizedJsonFromAiResponse(textResponse, null);
+    if (!flashcardData?.front || !flashcardData?.back) {
+        throw new HttpsError('internal', 'AI failed to generate a valid flashcard structure.');
+    }
     const newFlashcardRef = db.collection('Flashcards').doc();
     await newFlashcardRef.set({
-        ...flashcardData,
-        id: newFlashcardRef.id,
-        topicName: mcq.topicName,
-        chapterName: mcq.chapterName,
-        topicId: mcq.topicId,
-        chapterId: mcq.chapterId,
-        status: 'approved',
-        source: 'AI_Generated_From_MCQ',
-        creatorId: userId,
-        createdAt: FieldValue.serverTimestamp()
+        ...flashcardData, id: newFlashcardRef.id,
+        topicName: mcq.topicName, chapterName: mcq.chapterName,
+        topicId: mcq.topicId, chapterId: mcq.chapterId,
+        status: 'approved', source: 'AI_Generated_From_MCQ',
+        creatorId: userId, createdAt: FieldValue.serverTimestamp()
     });
-    return { flashcardId: newFlashcardRef.id, message: 'Flashcard created' };
+    return { flashcardId: newFlashcardRef.id, message: 'Flashcard created successfully!' };
 });
 
 export const getDailyGoal = onCall(LIGHT_FUNCTION_OPTIONS, async(request) => {
@@ -245,19 +248,13 @@ export const evaluateDDx = onCall(HEAVY_FUNCTION_OPTIONS, async(request) => {
     const userId = ensureAuthenticated(request);
     const { powerfulModel } = await ensureAiClientsInitialized();
     const { clinicalFindings, userAnswer } = request.data;
-    const aiPrompt = `You are a highly experienced pediatric clinician. Given the following clinical findings, evaluate the user's proposed differential diagnoses.
-    1. State if the user's answer is good, acceptable, or needs significant improvement.
-    2. Provide concise, high-yield feedback:
-       - If correct/acceptable, briefly explain why the user's answers are strong.
-       - If incorrect/needs improvement, provide the top 3 most likely diagnoses and briefly explain why.
-       - Also, provide 1-2 critical distinguishing features for the top diagnoses.
-       - Use relevant emojis frequently (e.g., 🔬, 🩺, 💊, 👶, ❤️‍🩹, 🧠).
-    3. Respond with a JSON object: {\"success\": true/false, \"feedback\": \"Your markdown feedback string.\"}. The success field should be true if the user's answer is good or acceptable, false otherwise.
+    const aiPrompt = `As a pediatric clinician, evaluate the user's differential diagnoses given the clinical findings. Provide concise feedback and the top 3 likely diagnoses. Use emojis. Respond with JSON: {\"success\": boolean, \"feedback\": \"Your markdown feedback.\"}.
     Clinical Findings: ${clinicalFindings}
-    User's Differential Diagnoses: ${userAnswer}`;
+    User's DDx: ${userAnswer}`;
     const result = await powerfulModel.generateContent(aiPrompt);
-    const aiResponse = extractJson(result.response.candidates?.[0]?.content?.parts?.[0]?.text || '{}');
-    await createAuditLog({ userId, message: `Submitted DDx. Result: ${aiResponse.success ? 'Success' : 'Needs Work'}.` });
+    const textResponse = result.response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+    const aiResponse = await getSanitizedJsonFromAiResponse(textResponse);
+    await createAuditLog({ userId, message: `Submitted DDx.` });
     return { success: aiResponse.success, feedback: aiResponse.feedback };
 });
 

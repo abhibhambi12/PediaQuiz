@@ -1,9 +1,9 @@
+// packages/types/src/index.ts
 import * as admin from 'firebase-admin';
 
 export type AbstractFieldValue = admin.firestore.FieldValue;
 export type AbstractTimestamp = admin.firestore.Timestamp;
 
-// Helper type to convert server-side Timestamps to client-side ISO strings
 type WithClientDates<T> = {
   [P in keyof T]: T[P] extends (admin.firestore.Timestamp | admin.firestore.FieldValue | Date)
     ? string
@@ -40,6 +40,14 @@ export interface User {
 }
 export type ClientUser = WithClientDates<User>;
 
+export interface ChatMessage {
+    id: string;
+    text: string;
+    sender: 'user' | 'assistant';
+    timestamp: Date;
+}
+
+
 // --- CONTENT STRUCTURE ---
 export interface Chapter {
     id: string;
@@ -71,6 +79,8 @@ export type ClientTopic = Omit<WithClientDates<Topic>, 'chapters'> & { chapters:
 
 export type ContentStatus = 'pending' | 'approved' | 'rejected' | 'archived';
 
+type ContentSource = 'Marrow_Extracted' | 'Marrow_AI_Generated' | 'AI_Generated' | 'AI_Generated_From_MCQ' | 'PediaQuiz' | 'Master' | 'Marrow';
+
 export interface MCQ {
     id: string;
     question: string;
@@ -86,7 +96,7 @@ export interface MCQ {
     createdAt?: admin.firestore.Timestamp | admin.firestore.FieldValue;
     updatedAt?: admin.firestore.Timestamp | admin.firestore.FieldValue;
     updatedBy?: string;
-    source?: 'Marrow_Extracted' | 'Marrow_AI_Generated' | 'AI_Generated' | 'AI_Generated_From_MCQ' | 'PediaQuiz' | 'Master';
+    source?: ContentSource;
     status: ContentStatus;
     uploadId?: string;
     tags?: string[];
@@ -107,7 +117,7 @@ export interface Flashcard {
     createdAt?: admin.firestore.Timestamp | admin.firestore.FieldValue;
     updatedAt?: admin.firestore.Timestamp | admin.firestore.FieldValue;
     updatedBy?: string;
-    source?: 'AI_Generated' | 'AI_Generated_From_MCQ' | 'Marrow' | 'PediaQuiz' | 'Master';
+    source?: ContentSource;
     status: ContentStatus;
     uploadId?: string;
     tags?: string[];
@@ -239,7 +249,7 @@ export type UploadStatus =
     | 'content_review' | 'completed' | 'error' | 'archived' | 'pending_classification'
     | 'pending_marrow_extraction' | 'pending_generation_decision' | 'pending_assignment'
     | 'generating_batch' | 'generation_failed_partially' | 'pending_final_review'
-    | 'pending_assignment_review' | 'batch_ready';
+    | 'pending_assignment_review' | 'batch_ready' | 'pending_marrow_analysis';
 
 export interface AwaitingReviewData { mcqs?: Partial<MCQ>[]; flashcards?: Partial<Flashcard>[]; }
 
@@ -265,6 +275,7 @@ export interface ContentGenerationJob {
     updatedAt: admin.firestore.Timestamp | admin.firestore.FieldValue;
     errors?: string[];
     finalAwaitingReviewData?: AwaitingReviewData;
+    validationFeedback?: string;
     suggestedTopic?: string;
     suggestedChapter?: string;
     suggestedPlan?: { mcqCount: number; flashcardCount: number; };
@@ -292,10 +303,27 @@ export interface Notification { id: string; userId: string; message: string; tim
 export interface AIConfig { powerfulModel: string; quickModel: string; temperature: number; maxOutputTokens: number; createdAt: admin.firestore.Timestamp | admin.firestore.FieldValue; updatedAt: admin.firestore.Timestamp | admin.firestore.FieldValue; }
 export interface DailyActivity { date: string; newUsers: number; quizzesCompleted: number; }
 export interface TopContentItem { id: string; title: string; type: 'mcq' | 'flashcard'; views: number; }
-export interface AdminAnalyticsData { totalUsers: number; totalQuizzesCompleted: number; totalContentItems: number; dailyActivity: DailyActivity[]; quizModeBreakdown: Record<string, number>; topContent: TopContentItem[]; }
-export interface ChatMessage { id: string; text: string; sender: 'user' | 'assistant'; timestamp: Date; }
+
+export interface AdminAnalyticsData {
+    totalUsers: number;
+    totalQuizzesCompleted: number;
+    totalContentItems: number;
+    dailyActivity: DailyActivity[];
+    quizModeBreakdown: Record<string, number>;
+    topContent: TopContentItem[];
+    masterMcqCount: number;
+    marrowMcqCount: number;
+    flashcardCount: number;
+}
+export interface FindContentByTextCallableData { searchText: string; }
 
 // --- CALLABLE FUNCTION INTERFACES ---
+export type GetAppDataCallableData = {};
+export type GetTagsCallableData = {};
+export type GetUserStatsCallableData = {};
+export type GetAIConfigCallableData = {};
+export type GetAdminAnalyticsCallableData = {};
+
 export interface AddAttemptCallableData { mcqId: string; isCorrect: boolean; selectedAnswer: string | null; sessionId?: string; confidenceRating?: ConfidenceRating; }
 export interface AddFlashcardAttemptCallableData { flashcardId: string; rating: ConfidenceRating; sessionId?: string;}
 export interface ToggleBookmarkCallableData { contentId: string; contentType: 'mcq' | 'flashcard'; }
@@ -309,7 +337,10 @@ export interface ResetUploadCallableData { uploadId: string; }
 export interface ArchiveUploadCallableData { uploadId: string; }
 export interface ReassignContentCallableData { uploadId: string; }
 export interface PrepareForRegenerationCallableData { uploadId: string; }
-export interface SuggestClassificationCallableData { uploadId: string; }
+export interface SuggestClassificationCallableData {
+    contentText: string;
+    topicsList: string[];
+}
 export interface PrepareBatchGenerationCallableData { uploadId: string; totalMcqCount: number; totalFlashcardCount: number; batchSize: number; approvedTopic: string; approvedChapter: string; }
 export interface StartAutomatedBatchGenerationCallableData { uploadId: string; }
 export interface AutoAssignContentCallableData { uploadId: string; existingTopics: Topic[]; scopeToTopicName?: string; }
@@ -322,6 +353,7 @@ export interface CreateFlashcardFromMcqCallableData { mcqId: string; }
 export interface CreateCustomTestCallableData { title: string; questions: string[]; questionCount?: number; difficulty?: 'easy' | 'medium' | 'hard' | 'any'; tags?: string[]; mcqFlashcardRatio?: string; }
 export interface CreateCustomTestCallableResponse { success: boolean; sessionId: string; }
 export interface SearchContentCallableData { query: string; terms?: string[]; }
+export interface FindContentByTextCallableData { searchText: string; }
 export interface ChatWithAssistantCallableData { prompt: string; history: ChatMessage[]; context?: { mcqId?: string; flashcardId?: string; chapterId?: string; chapterNotes?: string; }; }
 export interface GeneratePerformanceAdviceCallableData { overallAccuracy: number; strongTopics: string[]; weakTopics: string[]; }
 export interface GetQuizSessionFeedbackCallableData { quizResultId: string; }
@@ -338,19 +370,14 @@ export interface UpdateContentItemCallableData { id: string; type: 'mcq' | 'flas
 export interface UpdateEmailCallableData { newEmail: string; password: string; }
 export interface UpdatePasswordCallableData { newPassword: string; currentPassword: string; }
 export interface DeleteUserAccountCallableData { password: string; }
-export interface GetAIConfigCallableData {}
 export type UpdateAIConfigCallableData = Omit<AIConfig, 'createdAt' | 'updatedAt'>;
-export interface GetAdminAnalyticsCallableData {}
 export interface AddTagCallableData { tagName: string; }
 export interface UpdateTagCallableData { oldTagName: string; newTagName: string; }
 export interface DeleteTagCallableData { tagName: string; }
 export interface GetNotificationsCallableData { userId: string; }
 export interface MarkNotificationAsReadCallableData { notificationId: string; }
-export interface GetAppDataCallableData {}
 export interface GetQuizResultWithDetailsCallableData { resultId: string; }
-export interface GetTagsCallableData {}
 export interface GetQuestionsByTagCallableData { tagName: string; }
-export interface GetUserStatsCallableData {}
 export interface SetGoalCallableData extends Omit<GoalInput, 'id' | 'userId' | 'createdAt' | 'updatedAt' | 'progress'> {}
 export interface UpdateGoalCallableData extends Partial<Omit<GoalInput, 'id' | 'userId' | 'createdAt' | 'updatedAt'>> { id: string; }
 export interface DeleteGoalCallableData { goalId: string; }

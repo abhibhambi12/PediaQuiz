@@ -4,7 +4,6 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // --- Helper Functions ---
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -13,7 +12,6 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Role-based access checks from custom claims
     function getRole() {
       return request.auth.token.role;
     }
@@ -23,63 +21,68 @@ service cloud.firestore {
     }
 
     function isFaculty() {
-        return getRole() == 'faculty' || isAdmin();
-    }
-
-    // --- Content Collections: Read-only for authenticated users, full access for admins/faculty ---
-    match /{collection}/{docId} 
-    where collection in ['Topics', 'MarrowTopics', 'MasterMCQ', 'MarrowMCQ', 'Flashcards', 'KeyClinicalTopics'] {
-      allow read: if isAuthenticated() && resource.data.status == 'approved';
-      allow write: if isFaculty();
+      return getRole() == 'faculty' || isAdmin();
     }
     
-    match /Topics/{topicId}/ChapterNotes/{chapterId} {
-       allow read: if isAuthenticated();
-       allow write: if isFaculty();
+    function allowReadIfAuthenticated() {
+      return isAuthenticated();
+    }
+    
+    match /Topics/{topicId} {
+      allow read: if allowReadIfAuthenticated();
+      allow write: if request.auth == null || isFaculty();
+    }
+    match /MarrowTopics/{topicId} {
+      allow read: if allowReadIfAuthenticated();
+      allow write: if request.auth == null || isFaculty();
+    }
+    
+    match /MasterMCQ/{mcqId} {
+      allow read: if resource.data.status == 'approved' && allowReadIfAuthenticated();
+      allow write: if request.auth == null || isFaculty();
+    }
+    match /MarrowMCQ/{mcqId} {
+      allow read: if resource.data.status == 'approved' && allowReadIfAuthenticated();
+      allow write: if request.auth == null || isFaculty();
+    }
+    match /Flashcards/{flashcardId} {
+      allow read: if resource.data.status == 'approved' && allowReadIfAuthenticated();
+      allow write: if request.auth == null || isFaculty();
     }
 
-    // --- User-Specific Data Collections ---
     match /users/{userId} {
       allow read: if isUser(userId) || isAdmin();
-      // Users can only update specific, non-critical fields.
-      // Roles, admin status, XP, etc., can only be changed by secure backend functions.
-      allow update: if isUser(userId)
-                    && request.resource.data.diff(resource.data).affectedKeys()
-                       .hasOnly(['displayName', 'theme', 'updatedAt', 'notificationSettings']);
-      allow create, delete: if false; 
+      allow update: if isUser(userId);
+      allow create, delete: if isAdmin();
     }
     
-    match /users/{userId}/{collectionId}/{document=**} {
+    match /users/{userId}/{subcollection}/{docId=**} {
       allow read, write: if isUser(userId);
     }
     
-    // --- Application Data Collections (Managed by Backend) ---
     match /quizResults/{resultId} {
       allow read: if isUser(resource.data.userId) || isAdmin();
-      allow create, update, delete: if false; 
+      allow write: if request.auth == null; 
     }
     
     match /quizSessions/{sessionId} {
-      // Sessions are exclusively managed by backend functions to prevent cheating.
-      allow read, write: if false;
-    }
-
-    match /cramSheets/{sheetId} {
-      // Users have full control over their own cram sheets.
-      allow read, create, update, delete: if isUser(resource.data.userId);
+      allow read, update: if isUser(resource.data.userId);
+      allow create, delete: if request.auth == null;
     }
     
     match /contentGenerationJobs/{jobId} {
-      allow read, write: if isFaculty();
+      allow read: if isUser(resource.data.userId) || isFaculty();
+      allow write: if request.auth == null;
     }
 
     match /logs/{logId} {
       allow read: if isAdmin();
-      allow write: if false; // Only backend can write
+      allow write: if request.auth == null;
     }
     
-    match /adminConfig/{document} {
-      allow read, write: if isAdmin();
+    match /adminConfig/{docId} {
+      allow read: if isFaculty();
+      allow write: if isAdmin();
     }
   }
 }

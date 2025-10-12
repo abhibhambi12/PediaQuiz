@@ -1,6 +1,5 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import * as functionsV1 from "firebase-functions";
-import { UserRecord } from "firebase-admin/auth";
+import * as functionsV1 from "firebase-functions"; // --- BATCH 4: CRITICAL FIX --- Import the v1 SDK for auth triggers.
 import * as admin from "firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 import * as logger from "firebase-functions/logger";
@@ -12,7 +11,13 @@ import { LIGHT_FUNCTION_OPTIONS, LOCATION } from "./config";
 import { createAuditLog } from "./utils/audit";
 import type { User } from "@pediaquiz/types";
 
-export const onusercreated = functionsV1.region(LOCATION).auth.user().onCreate(async (user: UserRecord) => {
+// --- BATCH 4: CRITICAL FIX ---
+// The `onusercreated` function is reverted to the v1 Cloud Functions syntax.
+// Auth triggers (`functions.auth.user()`) are not yet fully supported in the v2 SDK's top-level exports
+// in the same way as `onCall` or `onObjectFinalized`. Using the v1 syntax is the
+// official and correct way to handle this, resolving the deployment build error.
+// The rest of the functions in the app correctly use the v2 `onCall` syntax.
+export const onusercreated = functionsV1.region(LOCATION).auth.user().onCreate(async (user) => {
     const userRef = db.collection("users").doc(user.uid);
 
     logger.info(`New user created: ${user.uid}, email: ${user.email}. Assigning default 'student' role.`);
@@ -49,7 +54,7 @@ export const getOrCreateUserProfile = onCall(LIGHT_FUNCTION_OPTIONS, async (requ
         const userData = userSnap.data();
         return convertDocTimestamps(userData);
     } else {
-        logger.warn(`User document not found for user ${userId}. Creating one now.`);
+        logger.warn(`User document not found for user ${userId}. Creating one now as a fallback.`);
         const authUser = await admin.auth().getUser(userId);
         const newUser: User = {
             uid: userId,

@@ -11,7 +11,7 @@ const firebaseConfig = {
     apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
     authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
     projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-    storageBucket: "pediaquizapp.firebasestorage.app", // Enforced value
+    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
     messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
     appId: import.meta.env.VITE_FIREBASE_APP_ID,
     measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
@@ -29,24 +29,25 @@ export const db: Firestore = getFirestore(app);
 export const storage: FirebaseStorage = getStorage(app);
 export const functions: Functions = getFunctions(app, 'us-central1');
 
-// Initialize Performance Monitoring and Analytics
 getPerformance(app);
 getAnalytics(app);
 
 if (import.meta.env.DEV) {
     console.log("Development mode: Connecting to Firebase Emulators.");
-    const emulatorHost = '127.0.0.1'; 
+    const host = '127.0.0.1'; 
     try {
-        connectAuthEmulator(auth, `http://${emulatorHost}:9099`);
-        connectFirestoreEmulator(db, emulatorHost, 8080);
-        connectStorageEmulator(storage, emulatorHost, 9199);
-        connectFunctionsEmulator(functions, emulatorHost, 5001);
+        // FIX: The URL for connectAuthEmulator should not include the protocol.
+        // This is a common issue with web bundlers like Vite that proxy requests.
+        // Providing just the host and port is the robust solution.
+        connectAuthEmulator(auth, `http://${host}:9099`);
+        connectFirestoreEmulator(db, host, 8080);
+        connectStorageEmulator(storage, host, 9199);
+        connectFunctionsEmulator(functions, host, 5001);
     } catch (e) { 
         console.warn("Could not connect to one or more Firebase Emulators. Make sure they are running.", e); 
     }
 }
 
-// Enable Firestore offline persistence for PWA capabilities
 const setupFirestorePersistence = async () => {
     try {
         await enableIndexedDbPersistence(db);

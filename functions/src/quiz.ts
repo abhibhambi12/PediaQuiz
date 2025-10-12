@@ -1,11 +1,52 @@
 import { onCall, HttpsError, CallableRequest } from "firebase-functions/v2/https";
-import * as logger from "firebase-functions/logger";
 import { FieldValue, Timestamp, FieldPath } from "firebase-admin/firestore";
 import { db } from "./firebaseAdmin";
 import { ensureAuthenticated } from "./utils/auth";
 import { convertDocTimestamps } from "./utils/serializers";
 import { LIGHT_FUNCTION_OPTIONS, XP_PER_CORRECT_MCQ, XP_PER_CORRECT_FLASHCARD, LEVEL_UP_THRESHOLD } from "./config";
-import type { QuizSession, MCQ, ClientQuizResult, AttemptedMCQDocument, CreateCustomTestCallableData, CreateCustomTestCallableResponse, Goal, Notification, Attempt } from "@pediaquiz/types";
+import type { QuizSession, MCQ, ClientQuizResult, AttemptedMCQDocument, CreateCustomTestCallableData, CreateCustomTestCallableResponse, Goal, Notification, Attempt, ConfidenceRating, User } from "@pediaquiz/types";
+import { calculateNextReview } from "./utils/spacedRepetition";
+
+async function checkAndAwardAchievements(userId: string, transaction: FirebaseFirestore.Transaction, resultData: ClientQuizResult, userDoc: FirebaseFirestore.DocumentSnapshot<FirebaseFirestore.DocumentData>) {
+    const userData = userDoc.data() as User;
+    const userBadges = new Set(userData.badges || []);
+    const newBadges: string[] = [];
+
+    if (!userBadges.has('first_quiz_master') && resultData.score === resultData.totalQuestions && resultData.totalQuestions > 0) {
+        const quizHistory = await db.collection('quizResults').where('userId', '==', userId).limit(2).get();
+        if (quizHistory.docs.length <= 1) { 
+            newBadges.push('first_quiz_master');
+        }
+    }
+
+    if (!userBadges.has('daily_streak_7') && (userData.currentStreak || 0) >= 7) {
+        newBadges.push('daily_streak_7');
+    }
+    
+    if (newBadges.length > 0) {
+        transaction.update(userDoc.ref, { badges: FieldValue.arrayUnion(...newBadges) });
+    }
+}
+
+export const getTopicContentIds = onCall(LIGHT_FUNCTION_OPTIONS, async (request) => {
+    ensureAuthenticated(request);
+    const { topicId } = request.data as { topicId: string };
+    if (!topicId) {
+        throw new HttpsError('invalid-argument', 'A topicId must be provided.');
+    }
+
+    const [masterMcqSnap, marrowMcqSnap, flashcardsSnap] = await Promise.all([
+        db.collection('MasterMCQ').where('topicId', '==', topicId).where('status', 'in', ['approved', null]).select().get(),
+        db.collection('MarrowMCQ').where('topicId', '==', topicId).where('status', '==', 'approved').select().get(),
+        db.collection('Flashcards').where('topicId', '==', topicId).where('status', 'in', ['approved', null]).select().get(),
+    ]);
+
+    const mcqIds = [...masterMcqSnap.docs.map(d => d.id), ...marrowMcqSnap.docs.map(d => d.id)];
+    const flashcardIds = flashcardsSnap.docs.map(d => d.id);
+
+    return { mcqIds, flashcardIds };
+});
+
 
 export const createSession = onCall(LIGHT_FUNCTION_OPTIONS, async (request) => {
     const userId = ensureAuthenticated(request);
@@ -27,7 +68,7 @@ export const createSession = onCall(LIGHT_FUNCTION_OPTIONS, async (request) => {
             itemOrder: [...(mcqIds || []), ...(flashcardIds || [])].sort(() => 0.5 - Math.random()),
             currentIndex: 0, answers: {}, isFinished: false,
             createdAt: FieldValue.serverTimestamp(),
-            expiresAt: Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000), // 24 hour expiry
+            expiresAt: Timestamp.fromMillis(Date.now() + 24 * 60 * 60 * 1000),
         };
         transaction.set(newSessionRef, newSession);
         transaction.update(userRef, { activeSessionId: newSessionRef.id });
@@ -67,8 +108,10 @@ export const finishSession = onCall(LIGHT_FUNCTION_OPTIONS, async (request) => {
         const sessionRef = db.collection("quizSessions").doc(sessionId);
         const userRef = db.collection("users").doc(userId);
         const sessionDoc = await transaction.get(sessionRef);
+        const userDoc = await transaction.get(userRef);
 
         if (!sessionDoc.exists || sessionDoc.data()?.userId !== userId) throw new HttpsError("not-found", "Session not found.");
+        if (!userDoc.exists) throw new HttpsError("not-found", "User not found.");
         
         const session = sessionDoc.data() as QuizSession;
         if (session.isFinished) {
@@ -90,7 +133,7 @@ export const finishSession = onCall(LIGHT_FUNCTION_OPTIONS, async (request) => {
 
             session.itemOrder?.forEach((itemId, index) => {
                 const answer = answers[index];
-                if (session.mcqIds.includes(itemId)) { // It's an MCQ
+                if (session.mcqIds.includes(itemId)) {
                     const mcq = mcqsById.get(itemId);
                     const selectedAnswer = answer?.selectedAnswer;
                     const correctAnswer = mcq ? (mcq.correctAnswer || mcq.options[mcq.answer.charCodeAt(0) - 65]) : '';
@@ -105,11 +148,16 @@ export const finishSession = onCall(LIGHT_FUNCTION_OPTIONS, async (request) => {
         }
         
         const resultRef = db.collection("quizResults").doc();
-        const newResult: Omit<ClientQuizResult, 'id' | 'quizDate'> = {
+        const newResult: ClientQuizResult = {
+            id: resultRef.id,
             userId, sessionId, mode: session.mode,
+            quizDate: Timestamp.now().toDate().toISOString(),
             totalQuestions: mcqIdsInSession.length, score, results, xpEarned
         };
-        transaction.set(resultRef, { ...newResult, id: resultRef.id, quizDate: FieldValue.serverTimestamp() });
+        
+        await checkAndAwardAchievements(userId, transaction, newResult, userDoc);
+
+        transaction.set(resultRef, { ...newResult, quizDate: FieldValue.serverTimestamp() });
         transaction.update(sessionRef, { isFinished: true, completedAt: FieldValue.serverTimestamp() });
         transaction.update(userRef, { activeSessionId: FieldValue.delete() });
         return resultRef.id;
@@ -120,7 +168,7 @@ export const finishSession = onCall(LIGHT_FUNCTION_OPTIONS, async (request) => {
 
 export const addAttempt = onCall(LIGHT_FUNCTION_OPTIONS, async (request) => {
     const userId = ensureAuthenticated(request);
-    const { mcqId, isCorrect, selectedAnswer, sessionId, confidenceRating } = request.data as { mcqId: string, isCorrect: boolean, selectedAnswer: string | null, sessionId?: string, confidenceRating?: 'again' | 'hard' | 'good' | 'easy' };
+    const { mcqId, isCorrect, selectedAnswer, sessionId, confidenceRating } = request.data as { mcqId: string, isCorrect: boolean, selectedAnswer: string | null, sessionId?: string, confidenceRating?: ConfidenceRating };
     
     const userRef = db.collection('users').doc(userId);
     const attemptRef = userRef.collection('attemptedMCQs').doc(mcqId);
@@ -138,39 +186,25 @@ export const addAttempt = onCall(LIGHT_FUNCTION_OPTIONS, async (request) => {
         const attemptDoc = await transaction.get(attemptRef);
 
         if (isCorrect) xpEarned = XP_PER_CORRECT_MCQ;
+        
+        const previousAttemptState = attemptDoc.exists ? attemptDoc.data()?.latestAttempt : null;
 
-        let interval = 0, easeFactor = 2.5, repetitions = 0;
-        if (attemptDoc.exists) {
-            const data = attemptDoc.data()?.latestAttempt;
-            interval = data?.interval || 0;
-            easeFactor = data?.easeFactor || 2.5;
-            repetitions = data?.repetitions || 0;
-        }
-
-        if (isCorrect) {
-            repetitions++;
-            if (repetitions === 1) interval = 1;
-            else if (repetitions === 2) interval = 6;
-            else interval = Math.round(interval * easeFactor);
-            const quality = confidenceRating === 'easy' ? 5 : confidenceRating === 'good' ? 4 : 3;
-            easeFactor += (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
-        } else {
-            repetitions = 0;
-            interval = 1;
-            easeFactor -= 0.2;
-        }
-        easeFactor = Math.max(1.3, easeFactor);
-        const nextReviewDate = new Date();
-        nextReviewDate.setDate(nextReviewDate.getDate() + interval);
+        const { interval, easeFactor, repetitions, nextReviewDate } = calculateNextReview({
+            isCorrect,
+            lastInterval: previousAttemptState?.interval || 0,
+            lastEaseFactor: previousAttemptState?.easeFactor || 2.5,
+            lastRepetitions: previousAttemptState?.repetitions || 0,
+        });
         
         const newAttempt: Attempt = {
             mcqId, isCorrect, selectedAnswer, sessionId: sessionId || '', confidenceRating,
-            timestamp: FieldValue.serverTimestamp(), userId, interval, easeFactor, repetitions,
-            nextReviewDate: Timestamp.fromDate(nextReviewDate), lastAttempted: FieldValue.serverTimestamp(),
+            timestamp: FieldValue.serverTimestamp(), userId,
+            interval, easeFactor, repetitions, nextReviewDate,
+            lastAttempted: FieldValue.serverTimestamp(),
             topicId: mcqData.topicId, chapterId: mcqData.chapterId
         };
         
-        transaction.set(attemptRef, { latestAttempt: newAttempt }, { merge: true });
+        transaction.set(attemptRef, { id: mcqId, latestAttempt: newAttempt, history: FieldValue.arrayUnion(newAttempt) }, { merge: true });
         
         let currentXp = userData.xp || 0;
         let currentLevel = userData.level || 1;
@@ -211,7 +245,24 @@ export const addFlashcardAttempt = onCall(LIGHT_FUNCTION_OPTIONS, async (request
     const xpEarned = XP_PER_CORRECT_FLASHCARD;
 
     await db.runTransaction(async (transaction) => {
-        transaction.set(attemptRef, { lastAttempt: { rating, timestamp: FieldValue.serverTimestamp() } }, { merge: true });
+        const attemptDoc = await transaction.get(attemptRef);
+        const previousState = attemptDoc.exists ? attemptDoc.data() : null;
+
+        const { interval, easeFactor, repetitions, nextReviewDate } = calculateNextReview({
+            rating,
+            lastInterval: previousState?.interval || 0,
+            lastEaseFactor: previousState?.easeFactor || 2.5,
+            lastRepetitions: previousState?.repetitions || 0,
+        });
+
+        const newAttemptData = {
+            flashcardId, rating, 
+            timestamp: FieldValue.serverTimestamp(),
+            interval, easeFactor, repetitions, nextReviewDate,
+            lastAttempted: FieldValue.serverTimestamp(),
+        };
+        
+        transaction.set(attemptRef, newAttemptData, { merge: true });
         transaction.update(userRef, { xp: FieldValue.increment(xpEarned) });
     });
 
@@ -231,24 +282,47 @@ export const toggleBookmark = onCall(LIGHT_FUNCTION_OPTIONS, async (request) => 
 });
 
 export const createCustomTest = onCall(LIGHT_FUNCTION_OPTIONS, async (request: CallableRequest<CreateCustomTestCallableData>): Promise<CreateCustomTestCallableResponse> => {
-    ensureAuthenticated(request);
-    const { questions: chapterIds, questionCount } = request.data;
+    const userId = ensureAuthenticated(request);
+    const { title, questions: chapterIds, questionCount } = request.data;
     const MAX_QUESTIONS = 250;
     if (questionCount && questionCount > MAX_QUESTIONS) throw new HttpsError('invalid-argument', `The max number of questions is ${MAX_QUESTIONS}.`);
     
     let potentialMcqIds: string[] = [];
     if (chapterIds.length > 0) {
-        const chunkSize = 30;
+        const chunkSize = 30; // Firestore 'in' query limit
         for (let i = 0; i < chapterIds.length; i += chunkSize) {
             const chunk = chapterIds.slice(i, i + chunkSize);
-            const mcqSnap = await db.collection('MasterMCQ').where('chapterId', 'in', chunk).where('status', '==', 'approved').select().get();
-            mcqSnap.forEach(doc => potentialMcqIds.push(doc.id));
+            // Query both MasterMCQ and MarrowMCQ collections
+            const [masterMcqSnap, marrowMcqSnap] = await Promise.all([
+                db.collection('MasterMCQ').where('chapterId', 'in', chunk).where('status', 'in', ['approved', null]).select().get(),
+                db.collection('MarrowMCQ').where('chapterId', 'in', chunk).where('status', '==', 'approved').select().get()
+            ]);
+            
+            masterMcqSnap.forEach(doc => potentialMcqIds.push(doc.id));
+            marrowMcqSnap.forEach(doc => potentialMcqIds.push(doc.id));
         }
     }
+
+    // De-duplicate in case of any overlap, though unlikely
+    potentialMcqIds = Array.from(new Set(potentialMcqIds));
+
     const finalMcqIds = potentialMcqIds.sort(() => 0.5 - Math.random()).slice(0, questionCount);
-    if (finalMcqIds.length === 0) throw new HttpsError('not-found', 'No approved questions found for the selected chapters.');
+    
+    if (finalMcqIds.length === 0) {
+        throw new HttpsError('not-found', 'No approved questions found for the selected chapters.');
+    }
     
     const response = await createSession.run({ auth: request.auth, data: { mode: 'custom', mcqIds: finalMcqIds, flashcardIds: [] }, rawRequest: request.rawRequest });
+    
+    await db.collection('customTests').add({
+        userId,
+        title,
+        sessionId: response.sessionId,
+        createdAt: FieldValue.serverTimestamp(),
+        questionCount: finalMcqIds.length,
+        chapterIds: chapterIds,
+    });
+    
     return { success: true, sessionId: response.sessionId };
 });
 
@@ -288,15 +362,6 @@ export const getQuizResultWithDetails = onCall(LIGHT_FUNCTION_OPTIONS, async (re
         mcqs = mcqDocs.docs.map(d => ({ id: d.id, ...d.data() } as MCQ));
     }
     return { quizResult: convertDocTimestamps(quizResult), mcqs: convertDocTimestamps(mcqs) };
-});
-
-export const submitOfflineQuiz = onCall(LIGHT_FUNCTION_OPTIONS, async (request) => {
-    const userId = ensureAuthenticated(request);
-    const quizData = request.data as Omit<ClientQuizResult, 'id' | 'userId' | 'quizDate'>;
-    const resultRef = db.collection('quizResults').doc();
-    await resultRef.set({ ...quizData, id: resultRef.id, userId, quizDate: FieldValue.serverTimestamp() });
-    logger.info(`Submitted offline quiz result for user ${userId}. New result ID: ${resultRef.id}`);
-    return { success: true, id: resultRef.id };
 });
 
 export const getGoals = onCall(LIGHT_FUNCTION_OPTIONS, async (request) => {

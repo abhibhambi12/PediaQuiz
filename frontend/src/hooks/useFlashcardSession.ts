@@ -1,12 +1,13 @@
+// frontend/src/hooks/useFlashcardSession.ts
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/components/Toast';
 import { toggleBookmark, addFlashcardAttempt } from '@/services/apiService';
+// FIX: Updated the import path to the correct service file.
 import { getChapterContent } from '@/services/contentService';
 import { Flashcard, ConfidenceRating } from '@pediaquiz/types';
-import { useData } from '@/contexts/DataContext';
 
 type FilterType = 'all' | 'bookmarked' | 'rated_hard';
 
@@ -16,7 +17,6 @@ export function useFlashcardSession() {
   const queryClient = useQueryClient();
   const { user, updateUserDoc } = useAuth();
   const { addToast } = useToast();
-  const { appData } = useData();
 
   const [allFlashcards, setAllFlashcards] = useState<Flashcard[]>([]);
   const [filteredFlashcards, setFilteredFlashcards] = useState<Flashcard[]>([]);
@@ -25,9 +25,10 @@ export function useFlashcardSession() {
   const [filter, setFilter] = useState<FilterType>('all');
 
   const { data: chapterContent, isLoading: isLoadingContent } = useQuery({
-    queryKey: ['chapterFlashcards', chapterId, appData],
-    queryFn: () => getChapterContent(appData, chapterId!),
-    enabled: !!chapterId && !!appData,
+    queryKey: ['chapterFlashcards', chapterId],
+    // The `res` parameter is now correctly typed because the import works.
+    queryFn: () => getChapterContent({ chapterId: chapterId! }).then(res => res.data),
+    enabled: !!chapterId,
   });
 
   useEffect(() => {
@@ -36,34 +37,42 @@ export function useFlashcardSession() {
       setFilteredFlashcards(chapterContent.flashcards);
     }
   }, [chapterContent]);
-  
+
   useEffect(() => {
     let newFiltered = allFlashcards;
     if (filter === 'bookmarked') {
-      newFiltered = allFlashcards.filter(fc => user?.bookmarkedFlashcards?.includes(fc.id));
+      newFiltered = allFlashcards.filter((fc) =>
+        user?.bookmarkedFlashcards?.includes(fc.id)
+      );
     }
-    // Logic for 'rated_hard' would require fetching user attempt data. For now, it's a placeholder.
     setFilteredFlashcards(newFiltered);
     setCurrentCardIndex(0);
   }, [filter, allFlashcards, user?.bookmarkedFlashcards]);
 
   const addAttemptMutation = useMutation({
     mutationFn: addFlashcardAttempt,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['userProfile', user?.uid] }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ['userProfile', user?.uid] }),
   });
 
   const toggleBookmarkMutation = useMutation({ mutationFn: toggleBookmark });
 
-  const currentCard = useMemo(() => filteredFlashcards[currentCardIndex], [filteredFlashcards, currentCardIndex]);
-  const isBookmarked = useMemo(() => !!user?.bookmarkedFlashcards?.includes(currentCard?.id ?? ''), [user?.bookmarkedFlashcards, currentCard]);
+  const currentCard = useMemo(
+    () => filteredFlashcards[currentCardIndex],
+    [filteredFlashcards, currentCardIndex]
+  );
+  const isBookmarked = useMemo(
+    () => !!user?.bookmarkedFlashcards?.includes(currentCard?.id ?? ''),
+    [user?.bookmarkedFlashcards, currentCard]
+  );
 
   const goToNext = useCallback(() => {
     setIsFlipped(false);
     setTimeout(() => {
       if (currentCardIndex < filteredFlashcards.length - 1) {
-        setCurrentCardIndex(prev => prev + 1);
+        setCurrentCardIndex((prev) => prev + 1);
       } else {
-        addToast("Session complete!", "success");
+        addToast('Session complete!', 'success');
         navigate(-1);
       }
     }, 150);
@@ -72,22 +81,27 @@ export function useFlashcardSession() {
   const goToPrevious = () => {
     if (currentCardIndex > 0) {
       setIsFlipped(false);
-      setTimeout(() => setCurrentCardIndex(prev => prev - 1), 150);
+      setTimeout(() => setCurrentCardIndex((prev) => prev - 1), 150);
     }
   };
 
-  const rateConfidence = useCallback((rating: ConfidenceRating) => {
-    if (currentCard) {
-      addAttemptMutation.mutate({ flashcardId: currentCard.id, rating });
-    }
-    goToNext();
-  }, [currentCard, addAttemptMutation, goToNext]);
+  const rateConfidence = useCallback(
+    (rating: ConfidenceRating) => {
+      if (currentCard) {
+        addAttemptMutation.mutate({ flashcardId: currentCard.id, rating });
+      }
+      goToNext();
+    },
+    [currentCard, addAttemptMutation, goToNext]
+  );
 
   const handleToggleBookmark = () => {
     const cardId = currentCard?.id;
     if (!cardId || !user) return;
     const currentBookmarks = user.bookmarkedFlashcards || [];
-    const newBookmarks = currentBookmarks.includes(cardId) ? currentBookmarks.filter(id => id !== cardId) : [...currentBookmarks, cardId];
+    const newBookmarks = currentBookmarks.includes(cardId)
+      ? currentBookmarks.filter((id) => id !== cardId)
+      : [...currentBookmarks, cardId];
     updateUserDoc({ bookmarkedFlashcards: newBookmarks }); // Optimistic update
     toggleBookmarkMutation.mutate({ contentId: cardId, contentType: 'flashcard' });
   };
@@ -104,7 +118,7 @@ export function useFlashcardSession() {
     },
     actions: {
       setFilter,
-      flipCard: () => setIsFlipped(f => !f),
+      flipCard: () => setIsFlipped((f) => !f),
       rateConfidence,
       goToNext,
       goToPrevious,

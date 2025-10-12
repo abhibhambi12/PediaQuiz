@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
-import { useData } from '@/contexts/DataContext';
 import { useToast } from '@/components/Toast';
 import { generateQuickFireTest } from '@/services/aiService';
 import { addAttempt, addQuizResult } from '@/services/apiService';
@@ -13,11 +12,11 @@ import { MCQ, ClientQuizResult } from '@pediaquiz/types';
 import { useWindowSize } from 'react-use';
 import Confetti from 'react-confetti';
 
-const getCorrectAnswerText = (mcq: MCQ): string => mcq.correctAnswer || mcq.options[mcq.answer.charCodeAt(0) - 65];
+const getCorrectAnswerText = (mcq: MCQ): string =>
+  mcq.correctAnswer || mcq.options[mcq.answer.charCodeAt(0) - 65];
 
 const QuickFireGamePage: React.FC = () => {
     const { user } = useAuth();
-    const { appData } = useData();
     const navigate = useNavigate();
     const { addToast } = useToast();
     const { width, height } = useWindowSize();
@@ -32,19 +31,25 @@ const QuickFireGamePage: React.FC = () => {
 
     const generateTestMutation = useMutation({
         mutationFn: () => generateQuickFireTest({ testSize: 15 }),
-        onSuccess: (data) => {
-            if (!data.data.mcqIds.length) { addToast("Could not generate a test.", "error"); navigate(-1); return; }
-            const fetchedMcqs = getMCQsByIds(appData ?? undefined, data.data.mcqIds);
-            setMcqs(fetchedMcqs);
+        onSuccess: async (data) => {
+            if (!data.data.mcqIds.length) { 
+                addToast("Could not generate a test.", "error"); 
+                navigate(-1); 
+                return; 
+            }
+            const fetchedMcqsRes = await getMCQsByIds(data.data.mcqIds);
+            setMcqs(fetchedMcqsRes);
         },
-        onError: (error: any) => { addToast(`Failed to start game: ${error.message}`, "error"); navigate(-1); }
+        onError: (error: any) => { 
+            addToast(`Failed to start game: ${error.message}`, "error"); 
+            navigate(-1); 
+        }
     });
     
     useEffect(() => {
-        if (appData) {
-            generateTestMutation.mutate();
-        }
-    }, [appData, generateTestMutation.mutate]);
+        generateTestMutation.mutate();
+    // FIX: Add missing dependencies to satisfy exhaustive-deps rule
+    }, [addToast, navigate]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleGameEnd = useCallback(async () => {
         if (isGameEnded) return;
@@ -55,7 +60,7 @@ const QuickFireGamePage: React.FC = () => {
             queryClient.invalidateQueries({ queryKey: ['userStats', user?.uid] });
         }
         if (finalScore > attempts.length / 2) setShowConfetti(true);
-    }, [isGameEnded, attempts, queryClient, user?.uid, addQuizResult, navigate]);
+    }, [isGameEnded, attempts, queryClient, user?.uid, addQuizResult]);
 
     const handleSelectOption = useCallback(async (selectedOption: string) => {
         if (isGameEnded || !user) return;

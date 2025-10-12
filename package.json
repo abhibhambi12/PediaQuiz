@@ -12,7 +12,7 @@
     "build:types": "npm run build --workspace=@pediaquiz/types",
     "build:functions": "npm run build --workspace=@pediaquiz/functions",
     "build:frontend": "npm run build --workspace=@pediaquiz/frontend",
-    "build": "npm run build:types && tsc --build --force && npm run build:frontend",
+    "build": "npm run build:types && npm run build:functions && npm run build:frontend",
     "setup:local": "npm install && npm run build:types && npm run build:functions",
     "clean": "rm -rf functions/lib packages/types/lib frontend/dist",
     "deploy:functions": "bash ./deploy-functions-master.sh",
@@ -34,5 +34,8 @@
   },
   "lint-staged": {
     "*.{ts,tsx,js,json,md}": "prettier --write"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.5.0"
   }
 }

@@ -1,6 +1,7 @@
+// frontend/src/components/SearchResultItem.tsx
 import React from 'react';
 
-// This is a generic interface used for displaying search results from different content types.
+// FIX: Add the 'export' keyword to make this interface available for import.
 export interface SearchResult {
   id: string;
   title: string;

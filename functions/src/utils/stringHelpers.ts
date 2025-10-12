@@ -1,4 +1,3 @@
-// FIX: Restored all string utility functions.
 import * as logger from "firebase-functions/logger";
 import { HttpsError } from "firebase-functions/v2/https";
 

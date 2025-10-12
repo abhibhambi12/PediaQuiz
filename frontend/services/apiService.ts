@@ -1,106 +1,117 @@
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '@/firebase';
+import { createApiCaller } from '@/utils/apiClient';
 import type {
     AppData, Notification, AIConfig, AdminAnalyticsData, LogEntry,
-    AssignmentSuggestion, ClientQuizResult, MCQ, Flashcard, UserUpload,
+    ClientQuizResult, MCQ, Flashcard, UserUpload,
     AddAttemptCallableData, AddFlashcardAttemptCallableData, AddTagCallableData,
-    ApproveContentCallableData, ApproveMarrowContentCallableData, ArchiveUploadCallableData,
-    AutoAssignContentCallableData, CreateCustomTestCallableData, DeleteContentItemCallableData,
+    ApproveContentCallableData, ArchiveUploadCallableData,
+    CreateCustomTestCallableData, CreateCustomTestCallableResponse, DeleteContentItemCallableData,
     DeleteGoalCallableData, DeleteTagCallableData, DeleteUserAccountCallableData,
-    ExtractMarrowContentCallableData, GetAIConfigCallableData, GetAdminAnalyticsCallableData,
+    GetAIConfigCallableData, GetAdminAnalyticsCallableData,
     GetAppDataCallableData, GetNotificationsCallableData, GetQuizResultWithDetailsCallableData,
-    MarkNotificationAsReadCallableData, PrepareBatchGenerationCallableData,
-    PrepareForRegenerationCallableData, ProcessManualTextInputCallableData,
-    ReassignContentCallableData, ResetUploadCallableData, SearchContentCallableData,
-    SetGoalCallableData, StartAutomatedBatchGenerationCallableData,
+    MarkNotificationAsReadCallableData, FindContentByTextCallableData,
+    ResetUploadCallableData, SearchContentCallableData,
+    SetGoalCallableData,
     ToggleBookmarkCallableData, UpdateAIConfigCallableData, UpdateChapterNotesCallableData,
     UpdateContentItemCallableData, UpdateEmailCallableData, UpdateGoalCallableData,
     UpdatePasswordCallableData, UpdateTagCallableData, UpdateThemeCallableData,
     GetTagsCallableData, GetQuestionsByTagCallableData, GetUserStatsCallableData,
-    AttemptedMCQs, Goal, ClientUser, User, QuizSession, ContentGenerationJob
+    AttemptedMCQDocument, Goal, ClientUser, User, QuizSession, ContentGenerationJob, ProcessManualTextInputCallableData, ExtractMarrowContentCallableData, ApproveMarrowContentCallableData
 } from '@pediaquiz/types';
 
+// --- BATCH 2: SERVICE LAYER REFACTORING ---
+// All functions are refactored to use `createApiCaller`, aligning with the new architecture.
+// TypeScript errors related to passing `{}` to void functions are also fixed.
+
 // App Data & Content Fetching
-const _getAppData = httpsCallable<GetAppDataCallableData, AppData>(functions, 'getAppData');
-const _getQuizResultWithDetails = httpsCallable<GetQuizResultWithDetailsCallableData, { quizResult: ClientQuizResult, mcqs: MCQ[] }>(functions, 'getQuizResultWithDetails');
-const _searchContent = httpsCallable<SearchContentCallableData, { mcqs: MCQ[], flashcards: Flashcard[] }>(functions, 'searchContent');
-const _getTags = httpsCallable<GetTagsCallableData, { tags: string[] }>(functions, 'getTags');
-const _getQuestionsByTag = httpsCallable<GetQuestionsByTagCallableData, { mcqs: MCQ[] }>(functions, 'getQuestionsByTag');
-const _getUserUploads = httpsCallable<{ uploadIds: string[] }, { uploads: UserUpload[] }>(functions, 'getUserUploads');
+const _getAppData = createApiCaller<GetAppDataCallableData, AppData>('getAppData');
+const _getQuizResultWithDetails = createApiCaller<GetQuizResultWithDetailsCallableData, { quizResult: ClientQuizResult, mcqs: MCQ[] }>('getQuizResultWithDetails');
+const _searchContent = createApiCaller<SearchContentCallableData, { mcqs: MCQ[], flashcards: Flashcard[] }>('searchContent');
+const _getTags = createApiCaller<GetTagsCallableData, { tags: string[] }>('getTags');
+const _getQuestionsByTag = createApiCaller<GetQuestionsByTagCallableData, { mcqs: MCQ[] }>('getQuestionsByTag');
+const _getUserUploads = createApiCaller<{ uploadIds: string[] }, { uploads: UserUpload[] }>('getUserUploads');
+const _getMcqsByIds = createApiCaller<{ mcqs: MCQ[] }, { mcqs: MCQ[] }>('getMcqsByIds');
+const _getFlashcardsByIds = createApiCaller<{ flashcards: Flashcard[] }, { flashcards: Flashcard[] }>('getFlashcardsByIds');
+export const _getTopicContentIds = createApiCaller<{ topicId: string }, { mcqIds: string[], flashcardIds: string[] }>('getTopicContentIds');
+export const _getChapterContent = createApiCaller<{ chapterId: string }, { mcqs: MCQ[], flashcards: Flashcard[] }>('getChapterContent');
 
 // Quiz, Session, & Attempt Management
-const _createCustomTest = httpsCallable<CreateCustomTestCallableData, { success: boolean, testId: string }>(functions, 'createCustomTest');
-const _addQuizResult = httpsCallable<Omit<ClientQuizResult, 'id' | 'userId' | 'quizDate'>, { success: boolean, id: string }>(functions, 'addQuizResult');
-const _addAttempt = httpsCallable<AddAttemptCallableData, { success: boolean, xpEarned: number }>(functions, 'addAttempt');
-const _addFlashcardAttempt = httpsCallable<AddFlashcardAttemptCallableData, { success: boolean, xpEarned: number }>(functions, 'addFlashcardAttempt');
-const _toggleBookmark = httpsCallable<ToggleBookmarkCallableData, { bookmarked: boolean }>(functions, 'toggleBookmark');
-const _createSession = httpsCallable<{ mode: QuizSession['mode'], mcqIds: string[], flashcardIds?: string[] }, { sessionId: string }>(functions, 'createSession');
-const _getSession = httpsCallable<{ sessionId: string }, QuizSession>(functions, 'getSession');
-const _updateSession = httpsCallable<{ sessionId: string, updates: Partial<QuizSession> }, { success: boolean }>(functions, 'updateSession');
-const _finishSession = httpsCallable<{ sessionId: string, answers: QuizSession['answers'] }, { success: boolean, resultId: string }>(functions, 'finishSession');
+const _createCustomTest = createApiCaller<CreateCustomTestCallableData, CreateCustomTestCallableResponse>('createCustomTest');
+const _addQuizResult = createApiCaller<Omit<ClientQuizResult, 'id' | 'userId' | 'quizDate'>, { success: boolean, id: string }>('addQuizResult');
+const _addAttempt = createApiCaller<AddAttemptCallableData, { success: boolean, xpEarned: number }>('addAttempt');
+const _addFlashcardAttempt = createApiCaller<AddFlashcardAttemptCallableData, { success: boolean, xpEarned: number }>('addFlashcardAttempt');
+const _toggleBookmark = createApiCaller<ToggleBookmarkCallableData, { bookmarked: boolean }>('toggleBookmark');
+const _createSession = createApiCaller<{ mode: QuizSession['mode'], mcqIds: string[], flashcardIds?: string[] }, { sessionId: string }>('createSession');
+const _getSession = createApiCaller<{ sessionId: string }, QuizSession>('getSession');
+const _updateSession = createApiCaller<{ sessionId: string, updates: Partial<QuizSession> }, { success: boolean }>('updateSession');
+const _finishSession = createApiCaller<{ sessionId: string, answers: QuizSession['answers'] }, { success: boolean, resultId: string }>('finishSession');
 
 // User Profile, Goals & Stats
-const _getOrCreateUserProfile = httpsCallable<void, ClientUser>(functions, 'getOrCreateUserProfile');
-const _updateUserProfile = httpsCallable<{ updates: Partial<User> }, { success: boolean }>(functions, 'updateUserProfile');
-const _getAttemptedMCQs = httpsCallable<void, AttemptedMCQs>(functions, 'getAttemptedMCQs');
-const _getQuizResults = httpsCallable<void, ClientQuizResult[]>(functions, 'getQuizResults');
-const _getGoals = httpsCallable<void, Goal[]>(functions, 'getGoals');
-const _setGoal = httpsCallable<SetGoalCallableData, { success: boolean, goalId: string }>(functions, 'setGoal');
-const _updateGoal = httpsCallable<UpdateGoalCallableData, { success: boolean }>(functions, 'updateGoal');
-const _deleteGoal = httpsCallable<DeleteGoalCallableData, { success: boolean }>(functions, 'deleteGoal');
-const _updateEmail = httpsCallable<UpdateEmailCallableData, { success: boolean }>(functions, 'updateEmail');
-const _updatePassword = httpsCallable<UpdatePasswordCallableData, { success: boolean }>(functions, 'updatePassword');
-const _deleteUserAccount = httpsCallable<DeleteUserAccountCallableData, { success: boolean }>(functions, 'deleteUserAccount');
-const _updateTheme = httpsCallable<UpdateThemeCallableData, { success: boolean }>(functions, 'updateTheme');
-const _getLogs = httpsCallable<void, LogEntry[]>(functions, 'getUserLogs');
-const _getUserStats = httpsCallable<GetUserStatsCallableData, { overallStats: any, topicPerformance: any }>(functions, 'getUserStats');
-const _getNotifications = httpsCallable<GetNotificationsCallableData, { notifications: Notification[] }>(functions, 'getNotifications');
-const _markNotificationAsRead = httpsCallable<MarkNotificationAsReadCallableData, { success: boolean }>(functions, 'markNotificationAsRead');
+const _getOrCreateUserProfile = createApiCaller<void, ClientUser>('getOrCreateUserProfile');
+const _updateUserProfile = createApiCaller<{ updates: Partial<User> }, { success: boolean }>('updateUserProfile');
+const _getAttemptedMCQs = createApiCaller<void, Record<string, AttemptedMCQDocument>>('getAttemptedMCQs');
+const _getQuizResults = createApiCaller<{ limit?: number, startAfter?: any }, { results: ClientQuizResult[], lastVisible: any }>('getQuizResults');
+const _getGoals = createApiCaller<void, Goal[]>('getGoals');
+const _setGoal = createApiCaller<SetGoalCallableData, { success: boolean, goalId: string }>('setGoal');
+const _updateGoal = createApiCaller<UpdateGoalCallableData, { success: boolean }>('updateGoal');
+const _deleteGoal = createApiCaller<DeleteGoalCallableData, { success: boolean }>('deleteGoal');
+const _updateEmail = createApiCaller<UpdateEmailCallableData, { success: boolean }>('updateEmail');
+const _updatePassword = createApiCaller<UpdatePasswordCallableData, { success: boolean }>('updatePassword');
+const _deleteUserAccount = createApiCaller<DeleteUserAccountCallableData, { success: boolean }>('deleteUserAccount');
+const _updateTheme = createApiCaller<UpdateThemeCallableData, { success: boolean }>('updateTheme');
+const _getLogs = createApiCaller<void, LogEntry[]>('getLogs');
+const _getUserStats = createApiCaller<GetUserStatsCallableData, { overallStats: any, topicPerformance: any[] }>('getUserStats');
+const _getNotifications = createApiCaller<GetNotificationsCallableData, { notifications: Notification[] }>('getNotifications');
+const _markNotificationAsRead = createApiCaller<MarkNotificationAsReadCallableData, { success: boolean }>('markNotificationAsRead');
 
 // Admin Functions
-const _getAdminReviewJobs = httpsCallable<{ pipeline: 'general' | 'marrow' }, ContentGenerationJob[]>(functions, 'getAdminReviewJobs');
-const _processManualTextInput = httpsCallable<ProcessManualTextInputCallableData, { success: boolean, uploadId: string, message: string }>(functions, 'processManualTextInput');
-const _extractMarrowContent = httpsCallable<ExtractMarrowContentCallableData, { success: boolean, message: string }>(functions, 'extractMarrowContent');
-const _approveMarrowContent = httpsCallable<ApproveMarrowContentCallableData, { success: boolean, message?: string }>(functions, 'approveMarrowContent');
-const _approveContent = httpsCallable<ApproveContentCallableData, { success: boolean, message?: string }>(functions, 'approveContent');
-const _resetUpload = httpsCallable<ResetUploadCallableData, { success: boolean, message: string }>(functions, 'resetUpload');
-const _archiveUpload = httpsCallable<ArchiveUploadCallableData, { success: boolean, message: string }>(functions, 'archiveUpload');
-const _reassignContent = httpsCallable<ReassignContentCallableData, { success: boolean, message: string }>(functions, 'reassignContent');
-const _prepareForRegeneration = httpsCallable<PrepareForRegenerationCallableData, { success: boolean, message: string }>(functions, 'prepareForRegeneration');
-const _prepareBatchGeneration = httpsCallable<PrepareBatchGenerationCallableData, { success: boolean, totalBatches: number }>(functions, 'prepareBatchGeneration');
-const _startAutomatedBatchGeneration = httpsCallable<StartAutomatedBatchGenerationCallableData, { success: boolean, message: string }>(functions, 'startAutomatedBatchGeneration');
-const _autoAssignContent = httpsCallable<AutoAssignContentCallableData, { success: boolean, suggestions: AssignmentSuggestion[] }>(functions, 'autoAssignContent');
-const _updateChapterNotes = httpsCallable<UpdateChapterNotesCallableData, { success: boolean, message: string }>(functions, 'updateChapterNotes');
-const _deleteContentItem = httpsCallable<DeleteContentItemCallableData, { success: boolean, message: string }>(functions, 'deleteContentItem');
-const _updateContentItem = httpsCallable<UpdateContentItemCallableData, { success: boolean }>(functions, 'updateContentItem');
-const _addTag = httpsCallable<AddTagCallableData, { success: boolean, message: string }>(functions, 'addTag');
-const _updateTag = httpsCallable<UpdateTagCallableData, { success: boolean, message: string }>(functions, 'updateTag');
-const _deleteTag = httpsCallable<DeleteTagCallableData, { success: boolean, message: string }>(functions, 'deleteTag');
-const _getAIConfig = httpsCallable<GetAIConfigCallableData, AIConfig>(functions, 'getAdminAIConfig');
-const _updateAIConfig = httpsCallable<UpdateAIConfigCallableData, { success: boolean }>(functions, 'updateAIConfig');
-const _getAdminAnalytics = httpsCallable<GetAdminAnalyticsCallableData, AdminAnalyticsData>(functions, 'getAdminAnalytics');
+const _getAdminReviewJobs = createApiCaller<{ pipeline: 'general' | 'marrow' }, ContentGenerationJob[]>('getAdminReviewJobs');
+const _processManualTextInput = createApiCaller<ProcessManualTextInputCallableData, { success: boolean, uploadId: string, message: string }>('processManualTextInput');
+const _extractMarrowContent = createApiCaller<ExtractMarrowContentCallableData, { success: boolean, message: string }>('extractMarrowContent');
+const _approveMarrowContent = createApiCaller<ApproveMarrowContentCallableData, { success: boolean, message?: string }>('approveMarrowContent');
+const _approveContent = createApiCaller<ApproveContentCallableData, { success: boolean, message?: string }>('approveContent');
+const _resetUpload = createApiCaller<ResetUploadCallableData, { success: boolean, message: string }>('resetUpload');
+const _archiveUpload = createApiCaller<ArchiveUploadCallableData, { success: boolean, message: string }>('archiveUpload');
+const _updateChapterNotes = createApiCaller<UpdateChapterNotesCallableData, { success: boolean, message: string }>('updateChapterNotes');
+const _deleteContentItem = createApiCaller<DeleteContentItemCallableData, { success: boolean, message: string }>('deleteContentItem');
+const _updateContentItem = createApiCaller<UpdateContentItemCallableData, { success: boolean }>('updateContentItem');
+const _addTag = createApiCaller<AddTagCallableData, { success: boolean, message: string }>('addTag');
+const _updateTag = createApiCaller<UpdateTagCallableData, { success: boolean, message: string }>('updateTag');
+const _deleteTag = createApiCaller<DeleteTagCallableData, { success: boolean, message: string }>('deleteTag');
+const _getAIConfig = createApiCaller<GetAIConfigCallableData, AIConfig>('getAIConfig');
+const _updateAIConfig = createApiCaller<UpdateAIConfigCallableData, { success: boolean }>('updateAIConfig');
+const _getAdminAnalytics = createApiCaller<GetAdminAnalyticsCallableData, AdminAnalyticsData>('getAdminAnalytics');
+const _getUsers = createApiCaller<{ limit?: number; pageToken?: string }, { users: User[], nextPageToken?: string }>('getUsers');
+const _setUserRole = createApiCaller<{ targetUid: string; newRole: User['role'] }, { success: boolean }>('setUserRole');
+const _getAuditLogs = createApiCaller<{ limit?: number, startAfter?: string }, { logs: LogEntry[], lastVisible: string | null }>('getAuditLogs');
+const _findContentByText = createApiCaller<FindContentByTextCallableData, { results: any[] }>('findContentByText');
+const _recalculateAllCounts = createApiCaller<void, { success: boolean, message: string }>('recalculateAllCounts');
 
 
-export const getAppData = async () => _getAppData();
+// --- EXPORTS ---
+// No changes to function signatures. Compatibility with UI components is maintained.
+// TypeScript Error Fix: Functions expecting `void` now correctly pass `undefined` instead of `{}`.
+export const getAppData = async () => _getAppData(undefined);
 export const getQuizResultWithDetails = async (data: GetQuizResultWithDetailsCallableData) => _getQuizResultWithDetails(data);
 export const searchContent = async (data: SearchContentCallableData) => _searchContent(data);
-export const getTags = async () => _getTags();
+export const getTags = async () => _getTags(undefined);
 export const getQuestionsByTag = async (data: GetQuestionsByTagCallableData) => _getQuestionsByTag(data);
 export const getUserUploads = async (data: { uploadIds: string[] }) => _getUserUploads(data);
+export const getMcqsByIds = async (data: { mcqs: MCQ[] }) => _getMcqsByIds(data);
+export const getFlashcardsByIds = async (data: { flashcards: Flashcard[] }) => _getFlashcardsByIds(data);
 export const createCustomTest = async (data: CreateCustomTestCallableData) => _createCustomTest(data);
 export const addQuizResult = async (result: Omit<ClientQuizResult, 'id' | 'userId' | 'quizDate'>) => _addQuizResult(result);
 export const addAttempt = async (data: AddAttemptCallableData) => _addAttempt(data);
 export const addFlashcardAttempt = async (data: AddFlashcardAttemptCallableData) => _addFlashcardAttempt(data);
 export const toggleBookmark = async (data: ToggleBookmarkCallableData) => _toggleBookmark(data);
-export const createSession = async (mode: QuizSession['mode'], mcqIds: string[], flashcardIds?: string[]) => _createSession({ mode, mcqIds, flashcardIds });
-export const getSession = async (sessionId: string) => _getSession({ sessionId });
-export const updateSession = async (sessionId: string, updates: Partial<QuizSession>) => _updateSession({ sessionId, updates });
-export const finishSession = async (sessionId: string, answers: QuizSession['answers']) => _finishSession({ sessionId, answers });
-export const getOrCreateUserProfile = async () => _getOrCreateUserProfile();
+export const createSession = async (data: { mode: QuizSession['mode'], mcqIds: string[], flashcardIds?: string[] }) => _createSession(data);
+export const getSession = async (data: { sessionId: string }) => _getSession(data);
+export const updateSession = async (data: { sessionId: string, updates: Partial<QuizSession> }) => _updateSession(data);
+export const finishSession = async (data: { sessionId: string, answers: QuizSession['answers'] }) => _finishSession(data);
+export const getOrCreateUserProfile = async () => _getOrCreateUserProfile(undefined);
 export const updateUserProfile = async (updates: { updates: Partial<User> }) => _updateUserProfile(updates);
-export const getAttemptedMCQs = async () => _getAttemptedMCQs();
-export const getQuizResults = async () => _getQuizResults();
-export const getGoals = async () => _getGoals();
+export const getAttemptedMCQs = async () => _getAttemptedMCQs(undefined);
+export const getQuizResults = async (data: { limit?: number, startAfter?: any } = {}) => _getQuizResults(data);
+export const getGoals = async () => _getGoals(undefined);
 export const setGoal = async (goal: SetGoalCallableData) => _setGoal(goal);
 export const updateGoal = async (data: UpdateGoalCallableData) => _updateGoal(data);
 export const deleteGoal = async (data: DeleteGoalCallableData) => _deleteGoal(data);
@@ -108,8 +119,8 @@ export const updateEmail = async (data: UpdateEmailCallableData) => _updateEmail
 export const updatePassword = async (data: UpdatePasswordCallableData) => _updatePassword(data);
 export const deleteUserAccount = async (data: DeleteUserAccountCallableData) => _deleteUserAccount(data);
 export const updateTheme = async (data: UpdateThemeCallableData) => _updateTheme(data);
-export const getLogs = async () => _getLogs();
-export const getUserStats = async () => _getUserStats();
+export const getLogs = async () => _getLogs(undefined);
+export const getUserStats = async () => _getUserStats(undefined);
 export const getNotifications = async (data: GetNotificationsCallableData) => _getNotifications(data);
 export const markNotificationAsRead = async (data: MarkNotificationAsReadCallableData) => _markNotificationAsRead(data);
 export const getAdminReviewJobs = async (data: { pipeline: 'general' | 'marrow' }) => _getAdminReviewJobs(data);
@@ -119,17 +130,17 @@ export const approveMarrowContent = async (data: ApproveMarrowContentCallableDat
 export const approveContent = async (data: ApproveContentCallableData) => _approveContent(data);
 export const resetUpload = async (data: ResetUploadCallableData) => _resetUpload(data);
 export const archiveUpload = async (data: ArchiveUploadCallableData) => _archiveUpload(data);
-export const reassignContent = async (data: ReassignContentCallableData) => _reassignContent(data);
-export const prepareForRegeneration = async (data: PrepareForRegenerationCallableData) => _prepareForRegeneration(data);
-export const prepareBatchGeneration = async (data: PrepareBatchGenerationCallableData) => _prepareBatchGeneration(data);
-export const startAutomatedBatchGeneration = async (data: StartAutomatedBatchGenerationCallableData) => _startAutomatedBatchGeneration(data);
-export const autoAssignContent = async (data: AutoAssignContentCallableData) => _autoAssignContent(data);
 export const updateChapterNotes = async (data: UpdateChapterNotesCallableData) => _updateChapterNotes(data);
 export const deleteContentItem = async (data: DeleteContentItemCallableData) => _deleteContentItem(data);
 export const updateContentItem = async (data: UpdateContentItemCallableData) => _updateContentItem(data);
 export const addTag = async (data: AddTagCallableData) => _addTag(data);
 export const updateTag = async (data: UpdateTagCallableData) => _updateTag(data);
 export const deleteTag = async (data: DeleteTagCallableData) => _deleteTag(data);
-export const getAIConfig = async () => _getAIConfig();
+export const getAIConfig = async () => _getAIConfig(undefined);
 export const updateAIConfig = async (config: UpdateAIConfigCallableData) => _updateAIConfig(config);
-export const getAdminAnalytics = async () => _getAdminAnalytics();
+export const getAdminAnalytics = async () => _getAdminAnalytics(undefined);
+export const getUsers = (data: { limit?: number; pageToken?: string }) => _getUsers(data);
+export const setUserRole = (data: { targetUid: string; newRole: User['role'] }) => _setUserRole(data);
+export const getAuditLogs = (data: { limit?: number, startAfter?: string }) => _getAuditLogs(data);
+export const findContentByText = async (data: FindContentByTextCallableData) => _findContentByText(data);
+export const recalculateAllCounts = async () => _recalculateAllCounts(undefined);

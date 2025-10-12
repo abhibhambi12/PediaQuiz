@@ -8,8 +8,8 @@ import type {
     DeleteGoalCallableData, DeleteTagCallableData, DeleteUserAccountCallableData,
     GetAIConfigCallableData, GetAdminAnalyticsCallableData,
     GetAppDataCallableData, GetNotificationsCallableData, GetQuizResultWithDetailsCallableData,
-    MarkNotificationAsReadCallableData,
-    ReassignContentCallableData, ResetUploadCallableData, SearchContentCallableData,
+    MarkNotificationAsReadCallableData, FindContentByTextCallableData,
+    ResetUploadCallableData, SearchContentCallableData,
     SetGoalCallableData,
     ToggleBookmarkCallableData, UpdateAIConfigCallableData, UpdateChapterNotesCallableData,
     UpdateContentItemCallableData, UpdateEmailCallableData, UpdateGoalCallableData,
@@ -25,6 +25,10 @@ const _searchContent = createApiCaller<SearchContentCallableData, { mcqs: MCQ[],
 const _getTags = createApiCaller<GetTagsCallableData, { tags: string[] }>('getTags');
 const _getQuestionsByTag = createApiCaller<GetQuestionsByTagCallableData, { mcqs: MCQ[] }>('getQuestionsByTag');
 const _getUserUploads = createApiCaller<{ uploadIds: string[] }, { uploads: UserUpload[] }>('getUserUploads');
+const _getMcqsByIds = createApiCaller<{ mcqIds: string[] }, { mcqs: MCQ[] }>('getMcqsByIds');
+const _getFlashcardsByIds = createApiCaller<{ flashcardIds: string[] }, { flashcards: Flashcard[] }>('getFlashcardsByIds');
+export const _getTopicContentIds = createApiCaller<{ topicId: string }, { mcqIds: string[], flashcardIds: string[] }>('getTopicContentIds');
+export const _getChapterContent = createApiCaller<{ chapterId: string }, { mcqs: MCQ[], flashcards: Flashcard[] }>('getChapterContent');
 
 // Quiz, Session, & Attempt Management
 const _createCustomTest = createApiCaller<CreateCustomTestCallableData, CreateCustomTestCallableResponse>('createCustomTest');
@@ -63,7 +67,6 @@ const _approveMarrowContent = createApiCaller<ApproveMarrowContentCallableData, 
 const _approveContent = createApiCaller<ApproveContentCallableData, { success: boolean, message?: string }>('approveContent');
 const _resetUpload = createApiCaller<ResetUploadCallableData, { success: boolean, message: string }>('resetUpload');
 const _archiveUpload = createApiCaller<ArchiveUploadCallableData, { success: boolean, message: string }>('archiveUpload');
-const _reassignContent = createApiCaller<ReassignContentCallableData, { success: boolean, message: string }>('reassignContent');
 const _updateChapterNotes = createApiCaller<UpdateChapterNotesCallableData, { success: boolean, message: string }>('updateChapterNotes');
 const _deleteContentItem = createApiCaller<DeleteContentItemCallableData, { success: boolean, message: string }>('deleteContentItem');
 const _updateContentItem = createApiCaller<UpdateContentItemCallableData, { success: boolean }>('updateContentItem');
@@ -76,14 +79,19 @@ const _getAdminAnalytics = createApiCaller<GetAdminAnalyticsCallableData, AdminA
 const _getUsers = createApiCaller<{ limit?: number; pageToken?: string }, { users: User[], nextPageToken?: string }>('getUsers');
 const _setUserRole = createApiCaller<{ targetUid: string; newRole: User['role'] }, { success: boolean }>('setUserRole');
 const _getAuditLogs = createApiCaller<{ limit?: number, startAfter?: string }, { logs: LogEntry[], lastVisible: string | null }>('getAuditLogs');
+const _findContentByText = createApiCaller<FindContentByTextCallableData, { results: any[] }>('findContentByText');
+const _recalculateAllCounts = createApiCaller<void, { success: boolean, message: string }>('recalculateAllCounts');
 
 
+// --- EXPORTS ---
 export const getAppData = async () => _getAppData({});
 export const getQuizResultWithDetails = async (data: GetQuizResultWithDetailsCallableData) => _getQuizResultWithDetails(data);
 export const searchContent = async (data: SearchContentCallableData) => _searchContent(data);
 export const getTags = async () => _getTags({});
 export const getQuestionsByTag = async (data: GetQuestionsByTagCallableData) => _getQuestionsByTag(data);
 export const getUserUploads = async (data: { uploadIds: string[] }) => _getUserUploads(data);
+export const getMcqsByIds = async (data: { mcqIds: string[] }) => _getMcqsByIds(data);
+export const getFlashcardsByIds = async (data: { flashcardIds: string[] }) => _getFlashcardsByIds(data);
 export const createCustomTest = async (data: CreateCustomTestCallableData) => _createCustomTest(data);
 export const addQuizResult = async (result: Omit<ClientQuizResult, 'id' | 'userId' | 'quizDate'>) => _addQuizResult(result);
 export const addAttempt = async (data: AddAttemptCallableData) => _addAttempt(data);
@@ -93,11 +101,11 @@ export const createSession = async (data: { mode: QuizSession['mode'], mcqIds: s
 export const getSession = async (data: { sessionId: string }) => _getSession(data);
 export const updateSession = async (data: { sessionId: string, updates: Partial<QuizSession> }) => _updateSession(data);
 export const finishSession = async (data: { sessionId: string, answers: QuizSession['answers'] }) => _finishSession(data);
-export const getOrCreateUserProfile = async () => _getOrCreateUserProfile();
+export const getOrCreateUserProfile = async () => _getOrCreateUserProfile(undefined);
 export const updateUserProfile = async (updates: { updates: Partial<User> }) => _updateUserProfile(updates);
-export const getAttemptedMCQs = async () => _getAttemptedMCQs({});
-export const getQuizResults = async (data: { limit?: number, startAfter?: any }) => _getQuizResults(data);
-export const getGoals = async () => _getGoals();
+export const getAttemptedMCQs = async () => _getAttemptedMCQs(undefined);
+export const getQuizResults = async (data: { limit?: number, startAfter?: any } = {}) => _getQuizResults(data);
+export const getGoals = async () => _getGoals(undefined);
 export const setGoal = async (goal: SetGoalCallableData) => _setGoal(goal);
 export const updateGoal = async (data: UpdateGoalCallableData) => _updateGoal(data);
 export const deleteGoal = async (data: DeleteGoalCallableData) => _deleteGoal(data);
@@ -105,7 +113,7 @@ export const updateEmail = async (data: UpdateEmailCallableData) => _updateEmail
 export const updatePassword = async (data: UpdatePasswordCallableData) => _updatePassword(data);
 export const deleteUserAccount = async (data: DeleteUserAccountCallableData) => _deleteUserAccount(data);
 export const updateTheme = async (data: UpdateThemeCallableData) => _updateTheme(data);
-export const getLogs = async () => _getLogs();
+export const getLogs = async () => _getLogs(undefined);
 export const getUserStats = async () => _getUserStats({});
 export const getNotifications = async (data: GetNotificationsCallableData) => _getNotifications(data);
 export const markNotificationAsRead = async (data: MarkNotificationAsReadCallableData) => _markNotificationAsRead(data);
@@ -116,7 +124,6 @@ export const approveMarrowContent = async (data: ApproveMarrowContentCallableDat
 export const approveContent = async (data: ApproveContentCallableData) => _approveContent(data);
 export const resetUpload = async (data: ResetUploadCallableData) => _resetUpload(data);
 export const archiveUpload = async (data: ArchiveUploadCallableData) => _archiveUpload(data);
-export const reassignContent = async (data: ReassignContentCallableData) => _reassignContent(data);
 export const updateChapterNotes = async (data: UpdateChapterNotesCallableData) => _updateChapterNotes(data);
 export const deleteContentItem = async (data: DeleteContentItemCallableData) => _deleteContentItem(data);
 export const updateContentItem = async (data: UpdateContentItemCallableData) => _updateContentItem(data);
@@ -129,3 +136,5 @@ export const getAdminAnalytics = async () => _getAdminAnalytics({});
 export const getUsers = (data: { limit?: number; pageToken?: string }) => _getUsers(data);
 export const setUserRole = (data: { targetUid: string; newRole: User['role'] }) => _setUserRole(data);
 export const getAuditLogs = (data: { limit?: number, startAfter?: string }) => _getAuditLogs(data);
+export const findContentByText = async (data: FindContentByTextCallableData) => _findContentByText(data);
+export const recalculateAllCounts = async () => _recalculateAllCounts(undefined);

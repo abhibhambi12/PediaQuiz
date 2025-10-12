@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, memo } from 'react'; // --- BATCH 6: COMPONENT MEMOIZATION --- Import `memo`.
 import { Flashcard, ConfidenceRating } from '@pediaquiz/types';
 import clsx from 'clsx';
 import {
@@ -32,22 +32,41 @@ const FlashcardViewer: React.FC<FlashcardViewerProps> = ({
   progress,
   actions,
 }) => {
-  // Defensive check for corrupted data
+  // Existing component logic remains unchanged.
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'ArrowRight') actions.onNext();
+        if (e.key === 'ArrowLeft') actions.onPrevious();
+        if (e.key === ' ') {
+            e.preventDefault();
+            actions.onFlip();
+        }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [actions]);
+
+
   if (!card || !card.front || !card.back) {
     return (
-        <div className="card-base p-6 text-center text-red-500">
-            <p className="font-semibold">Error: Flashcard data is corrupted or incomplete.</p>
-        </div>
+      <div className="card-base p-6 text-center text-red-500">
+        <p className="font-semibold">
+          Error: Flashcard data is corrupted or incomplete.
+        </p>
+      </div>
     );
   }
-  
+
   return (
     <div className="max-w-xl mx-auto p-4">
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-bold">
           {card.chapterName} - {progress.current}/{progress.total}
         </h2>
-        <button onClick={actions.onToggleBookmark} aria-label={isBookmarked ? "Remove bookmark" : "Add bookmark"}>
+        <button
+          onClick={actions.onToggleBookmark}
+          aria-label={isBookmarked ? 'Remove bookmark' : 'Add bookmark'}
+        >
           {isBookmarked ? (
             <BookmarkSolidIcon className="h-6 w-6 text-amber-500" />
           ) : (
@@ -78,14 +97,38 @@ const FlashcardViewer: React.FC<FlashcardViewerProps> = ({
       </div>
       {isFlipped && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6 animate-fade-in-up">
-          <button onClick={() => actions.onRate('again')} className="btn-danger py-3">Again</button>
-          <button onClick={() => actions.onRate('hard')} className="btn-warning py-3">Hard</button>
-          <button onClick={() => actions.onRate('good')} className="btn-secondary py-3">Good</button>
-          <button onClick={() => actions.onRate('easy')} className="btn-success py-3">Easy</button>
+          <button
+            onClick={() => actions.onRate('again')}
+            className="btn-danger py-3"
+          >
+            Again
+          </button>
+          <button
+            onClick={() => actions.onRate('hard')}
+            className="btn-warning py-3"
+          >
+            Hard
+          </button>
+          <button
+            onClick={() => actions.onRate('good')}
+            className="btn-secondary py-3"
+          >
+            Good
+          </button>
+          <button
+            onClick={() => actions.onRate('easy')}
+            className="btn-success py-3"
+          >
+            Easy
+          </button>
         </div>
       )}
       <div className="flex justify-between items-center mt-6">
-        <button onClick={actions.onPrevious} disabled={progress.current === 1} className="btn-neutral">
+        <button
+          onClick={actions.onPrevious}
+          disabled={progress.current === 1}
+          className="btn-neutral"
+        >
           <ChevronLeftIcon className="h-5 w-5 inline" /> Prev
         </button>
         <button onClick={actions.onNext} className="btn-primary">
@@ -96,4 +139,8 @@ const FlashcardViewer: React.FC<FlashcardViewerProps> = ({
   );
 };
 
-export default React.memo(FlashcardViewer);
+// --- BATCH 6: COMPONENT MEMOIZATION ---
+// The component is wrapped in `React.memo`. This is a performance optimization
+// that prevents the component from re-rendering if its props have not changed,
+// which is common when the parent session component's state updates.
+export default memo(FlashcardViewer);

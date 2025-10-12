@@ -1,37 +1,45 @@
 import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Navigate } from 'react-router-dom';
+import { Navigate, Outlet } from 'react-router-dom';
 import Loader from './Loader';
 import { User } from '@pediaquiz/types';
 
 interface AdminRouteProps {
-    children: React.ReactElement;
-    requiredRole: User['role'];
+  children?: React.ReactNode;
+  requiredRole: User['role'];
 }
 
-const AdminRoute: React.FC<AdminRouteProps> = ({ children, requiredRole }) => {
-    const { user, loading } = useAuth();
+const AdminRoute: React.FC<AdminRouteProps> = ({
+  children,
+  requiredRole,
+}) => {
+  const { user, loading } = useAuth();
 
-    if (loading) {
-        return <Loader fullScreen message="Verifying permissions..." />;
-    }
+  if (loading) {
+    return <Loader fullScreen message="Verifying permissions..." />;
+  }
 
-    const userRole = user?.role || 'student';
+  if (!user) {
+    return <Navigate to="/auth" replace />;
+  }
 
-    const roleHierarchy = {
-        student: 1,
-        resident: 2, 
-        faculty: 3,
-        admin: 4,
-    };
+  const userRole = user.role || 'student';
 
-    const hasPermission = user && (roleHierarchy[userRole] >= roleHierarchy[requiredRole]);
+  const roleHierarchy = {
+    student: 1,
+    resident: 2,
+    faculty: 3,
+    admin: 4,
+  };
 
-    if (!hasPermission) {
-        return <Navigate to="/" replace />;
-    }
+  const hasPermission =
+    roleHierarchy[userRole] >= roleHierarchy[requiredRole];
 
-    return children;
+  if (!hasPermission) {
+    return <Navigate to="/" replace />;
+  }
+
+  return children ? <>{children}</> : <Outlet />;
 };
 
 export default AdminRoute;

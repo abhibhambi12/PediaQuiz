@@ -1,4 +1,5 @@
-    import React, { useState, useEffect } from 'react';
+// frontend/src/pages/AdminAIConfigPage.tsx
+import React, { useState, useEffect } from 'react';
     import { useAuth } from '@/contexts/AuthContext';
     import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
     import { updateAIConfig, getAIConfig } from '@/services/apiService';

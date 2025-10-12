@@ -4,9 +4,12 @@ import { useMCQSession } from '@/hooks/useMCQSession';
 import MCQViewer from '@/components/MCQViewer';
 import Loader from '@/components/Loader';
 import ConfirmationModal from '@/components/ConfirmationModal';
+// --- BATCH 2 CHANGE: PALETTE FEATURE ---
+// Import the new QuestionPalette component.
 import QuestionPalette from '@/components/QuestionPalette';
 import { useAuth } from '@/contexts/AuthContext';
 import { WifiIcon } from '@heroicons/react/24/outline';
+import MotivationalModal from '@/components/MotivationalModal';
 
 const MCQSessionPage: React.FC = () => {
   const { user } = useAuth();
@@ -18,6 +21,7 @@ const MCQSessionPage: React.FC = () => {
     session,
     sessionError,
     progress,
+    motivationalMessage,
     actions,
   } = useMCQSession();
 
@@ -29,6 +33,12 @@ const MCQSessionPage: React.FC = () => {
 
   return (
     <>
+      <MotivationalModal
+        isOpen={!!motivationalMessage}
+        onClose={actions.clearMotivationalMessage}
+        message={motivationalMessage}
+      />
+      
       <ConfirmationModal
         isOpen={actions.isEnding}
         onClose={actions.cancelEndSession}
@@ -38,7 +48,7 @@ const MCQSessionPage: React.FC = () => {
         confirmText="End & Save"
         variant="danger"
       />
-       <ConfirmationModal
+      <ConfirmationModal
         isOpen={actions.isFinishing}
         onClose={actions.cancelFinish}
         onConfirm={actions.confirmFinish}
@@ -47,36 +57,47 @@ const MCQSessionPage: React.FC = () => {
         confirmText="Submit Quiz"
         variant="confirm"
       />
-      
+
       {sessionError && (
-          <div className="mb-4 p-3 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 flex items-center gap-2">
-              <WifiIcon className="h-5 w-5" />
-              <p className="text-sm font-semibold">{sessionError}</p>
-          </div>
+        <div className="mb-4 p-3 rounded-lg bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200 flex items-center gap-2">
+          <WifiIcon className="h-5 w-5" />
+          <p className="text-sm font-semibold">{sessionError}</p>
+        </div>
       )}
 
-      <div className="relative">
+      <div className="relative animate-fade-in-up">
         <MCQViewer
-            mcq={currentMcq}
-            isBookmarked={isBookmarked}
-            answerState={answers[progress.current]}
-            actions={{
-                onSelectOption: actions.selectOption,
-                onToggleBookmark: actions.toggleBookmark,
-            }}
+          mcq={currentMcq}
+          isBookmarked={isBookmarked}
+          answerState={answers[progress.current]}
+          actions={{
+            onSelectOption: actions.selectOption,
+            onToggleBookmark: actions.toggleBookmark,
+          }}
         />
         <div className="flex justify-between items-center mt-6">
-            <button onClick={() => actions.goToQuestion(progress.current - 1)} disabled={progress.current === 0} className="btn-neutral">
-                Previous
-            </button>
-            <button onClick={actions.goToNext} disabled={!isAnswered} className="btn-primary">
-                {progress.current === progress.total - 1 ? 'Finish' : 'Next'}
-            </button>
+          <button
+            onClick={() => actions.goToQuestion(progress.current - 1)}
+            disabled={progress.current === 0}
+            className="btn-neutral"
+          >
+            Previous
+          </button>
+          <button
+            onClick={actions.goToNext}
+            disabled={!isAnswered}
+            className="btn-primary"
+          >
+            {progress.current === progress.total - 1 ? 'Finish ✅' : 'Next →'}
+          </button>
         </div>
       </div>
 
+      {/* --- BATCH 2 CHANGE: PALETTE FEATURE --- */}
+      {/* The new QuestionPalette component is rendered here. */}
+      {/* It receives all the necessary props from the `useMCQSession` hook. */}
       <QuestionPalette
-        mcqs={session.mcqIds.map(id => ({ id } as any))} // Pass stub for performance
+        mcqs={actions.mcqsForPalette}
         answers={answers}
         currentIndex={progress.current}
         bookmarkedMcqIds={user?.bookmarkedMcqs || []}

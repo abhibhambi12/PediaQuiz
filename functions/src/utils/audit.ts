@@ -1,4 +1,3 @@
-// FIX: Restored the audit logging helper function.
 import { FieldValue } from "firebase-admin/firestore";
 import * as logger from "firebase-functions/logger";
 import { db } from "../firebaseAdmin";

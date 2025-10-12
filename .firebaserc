@@ -4,5 +4,6 @@
     "pediaquizapp": "pediaquizapp"
   },
   "targets": {},
-  "etags": {}
+  "etags": {},
+  "locationId": "us-central1"
 }
